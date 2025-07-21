@@ -1,5 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getFirestore, collection, addDoc, getDocs, updateDoc, doc, query, where
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDGg5JtE_7gVRhTlRY30bpXsmMpvPEQ3tw",
@@ -58,19 +60,20 @@ window.showCadastro = (usuario) => {
     <input id="cliente" placeholder="Nome do cliente" />
     <input id="local" placeholder="Local da venda" />
     <input id="valor" placeholder="Valor (R$)" type="number" />
-    <select id="vendidos" multiple>
-      <option>Cone</option>
-      <option>Trufa</option>
-      <option>Bolo de pote</option>
-      <option>Pão de mel</option>
-      <option>Escondidinho de uva</option>
-      <option>Bombom de uva</option>
-      <option>Bombom de morango</option>
-      <option>Coxinha de morango</option>
-      <option>Camafeu</option>
-      <option>Caixinha</option>
-      <option>Mousse</option>
-      <option>Lanche natural</option>
+    <label>Produtos vendidos:</label>
+    <select id="produtos" multiple size="6">
+      <option value="Cone">Cone</option>
+      <option value="Trufa">Trufa</option>
+      <option value="Bolo de pote">Bolo de pote</option>
+      <option value="Pão de mel">Pão de mel</option>
+      <option value="Escondidinho de uva">Escondidinho de uva</option>
+      <option value="Bombom de uva">Bombom de uva</option>
+      <option value="Bombom de morango">Bombom de morango</option>
+      <option value="Coxinha de morango">Coxinha de morango</option>
+      <option value="Camafeu">Camafeu</option>
+      <option value="Caixinha">Caixinha</option>
+      <option value="Mousse">Mousse</option>
+      <option value="Lanche natural">Lanche natural</option>
     </select>
     <select id="status">
       <option value="pago">Pago</option>
@@ -112,32 +115,33 @@ window.cadastrar = async (usuario) => {
   const dataReceber = document.getElementById("dataReceber")?.value || "";
   const valorParcial = parseFloat(document.getElementById("valorParcial")?.value || 0);
   const faltaReceber = parseFloat(document.getElementById("falta")?.value || 0);
+  const produtosSelecionados = Array.from(document.getElementById("produtos").selectedOptions).map(opt => opt.value);
   const data = new Date().toISOString().split("T")[0];
 
-  const vendidosSelect = document.getElementById("vendidos");
-  const vendidos = Array.from(vendidosSelect.selectedOptions).map(opt => opt.value);
-
-  if (!cliente || !local || !valor || vendidos.length === 0) {
-    alert("Preencha todos os campos e selecione ao menos um produto.");
+  if (!cliente || !local || !valor || produtosSelecionados.length === 0) {
+    alert("Preencha todos os campos!");
     return;
   }
 
-  // 🔒 Verificar duplicidade
-  const hojeQuery = query(
-    collection(db, "vendas"),
-    where("cliente", "==", cliente),
-    where("local", "==", local),
-    where("data", "==", data)
-  );
-  const existente = await getDocs(hojeQuery);
-  if (!existente.empty) {
-    alert("Já existe um cadastro hoje com esse cliente e local.");
+  const snap = await getDocs(collection(db, "vendas"));
+  const jaExiste = snap.docs.some(doc => {
+    const d = doc.data();
+    return (
+      d.cliente === cliente &&
+      d.local === local &&
+      d.valor === valor &&
+      JSON.stringify(d.produtos || []) === JSON.stringify(produtosSelecionados) &&
+      d.data === data
+    );
+  });
+
+  if (jaExiste) {
+    alert("Venda já cadastrada com os mesmos dados!");
     return;
   }
 
   await addDoc(collection(db, "vendas"), {
-    usuario, cliente, local, valor, status, forma,
-    vendidos,
+    usuario, cliente, local, valor, status, forma, produtos: produtosSelecionados,
     valorParcial: status === "parcial" ? valorParcial : null,
     faltaReceber: status === "parcial" ? faltaReceber : (status === "nao" ? valor : 0),
     dataReceber: status !== "pago" ? dataReceber : null,
@@ -147,6 +151,7 @@ window.cadastrar = async (usuario) => {
   alert("Venda salva!");
 };
 
+// Parte do Dashboard
 window.showDashboard = async () => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => doc.data());
@@ -166,42 +171,99 @@ window.showDashboard = async () => {
     const m = i.toString().padStart(2, '0');
     html += `<option value="${m}">${m}</option>`;
   }
-  html += `</select><ul id="vendasMes"></ul>`;
 
+  html += `</select><ul id="vendasMes"></ul>`;
   document.getElementById("conteudo").innerHTML = html;
 
   document.getElementById("mesSelect").addEventListener("change", e => {
     const mes = e.target.value;
     const filtradas = vendas.filter(v => (v.dataReceber || "").includes(`-${mes}-`));
-    const lista = filtradas.map(v => `<li>${v.dataReceber} - ${v.cliente} - ${v.local} - R$ ${v.faltaReceber || v.valor}</li>`).join("");
+    const lista = filtradas.map(v =>
+      `<li>${v.dataReceber} - ${v.cliente} - ${v.local} - R$ ${v.faltaReceber || v.valor}</li>`
+    ).join("");
     document.getElementById("vendasMes").innerHTML = lista;
   });
 };
 
+// Parte de cobrança
 window.showCobranca = async () => {
   const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(doc => doc.data());
-  const hoje = new Date().toISOString().split("T")[0];
-  const cobrarHoje = vendas.filter(v => v.dataReceber === hoje);
+  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-  let html = `<h2>Cobrança</h2>
-    <h3>Cobrar hoje</h3>
-    ${cobrarHoje.map(v => `<p>${v.cliente} - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>`).join("")}
-    <select id="mesFiltro"><option value="">Filtrar mês</option>`;
-
-  for (let i = 1; i <= 12; i++) {
-    const m = i.toString().padStart(2, '0');
-    html += `<option value="${m}">${m}</option>`;
+  const dias = {};
+  for (const venda of vendas) {
+    if (venda.dataReceber) {
+      if (!dias[venda.dataReceber]) dias[venda.dataReceber] = [];
+      dias[venda.dataReceber].push(venda);
+    }
   }
 
-  html += `</select><div id="cobMes"></div>`;
+  let html = `<h2>Cobranças por Data</h2>`;
+  Object.entries(dias).forEach(([data, lista]) => {
+    const total = lista.reduce((soma, v) => soma + (v.faltaReceber || v.valor), 0);
+    html += `<div style="border:1px solid #ccc;padding:10px;margin:10px 0;">
+      <strong>${data}</strong> - R$ ${total.toFixed(2)}
+      <button onclick="mostrarDetalhes('${data}')">Ver Detalhes</button>
+      <div id="detalhes-${data}" style="display:none;"></div>
+    </div>`;
+  });
 
   document.getElementById("conteudo").innerHTML = html;
+};
 
-  document.getElementById("mesFiltro").addEventListener("change", e => {
-    const mes = e.target.value;
-    const cobrancas = vendas.filter(v => (v.dataReceber || "").includes(`-${mes}-`));
-    const lista = cobrancas.map(v => `<p>${v.dataReceber} - ${v.cliente} - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>`).join("");
-    document.getElementById("cobMes").innerHTML = lista;
+window.mostrarDetalhes = (data) => {
+  const detalhes = document.getElementById(`detalhes-${data}`);
+  const estaVisivel = detalhes.style.display === "block";
+  detalhes.style.display = estaVisivel ? "none" : "block";
+
+  if (!estaVisivel) {
+    mostrarPessoasParaCobrar(data, detalhes);
+  }
+};
+
+async function mostrarPessoasParaCobrar(data, div) {
+  const snap = await getDocs(collection(db, "vendas"));
+  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const lista = vendas.filter(v => v.dataReceber === data);
+
+  div.innerHTML = lista.map(v => `
+    <div style="border:1px dashed #aaa;padding:10px;margin:5px 0;">
+      <p><strong>${v.cliente}</strong> - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>
+      <button onclick="marcarComoPago('${v.id}')">Cobrei - já pago</button>
+      <button onclick="naoPago('${v.id}')">Cobrei - não pago</button>
+      <button onclick="reagendar('${v.id}')">Reagendar</button>
+      <div id="novaData-${v.id}" style="display:none;">
+        <input type="date" id="inputData-${v.id}" />
+        <button onclick="salvarReagendamento('${v.id}')">Salvar nova data</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+window.marcarComoPago = async (id) => {
+  await updateDoc(doc(db, "vendas", id), {
+    status: "pago",
+    dataReceber: null,
+    faltaReceber: 0
   });
+  alert("Marcado como pago!");
+  showCobranca();
+};
+
+window.naoPago = (id) => {
+  alert("Cobrança registrada como não paga.");
+};
+
+window.reagendar = (id) => {
+  document.getElementById(`novaData-${id}`).style.display = "block";
+};
+
+window.salvarReagendamento = async (id) => {
+  const nova = document.getElementById(`inputData-${id}`).value;
+  if (!nova) return alert("Selecione uma nova data!");
+  await updateDoc(doc(db, "vendas", id), {
+    dataReceber: nova
+  });
+  alert("Reagendado!");
+  showCobranca();
 };
