@@ -27,6 +27,7 @@ const root = document.getElementById("root");
 function showLogin() {
   root.innerHTML = `
     <div class="card">
+      <img src="logo-buck-doces.jpeg" alt="Logo" class="logo" />
       <h2>Login</h2>
       <input type="text" id="usuario" placeholder="Usuário" />
       <input type="password" id="senha" placeholder="Senha" />
