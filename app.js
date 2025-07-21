@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore,
   collection,
@@ -6,9 +6,8 @@ import {
   getDocs,
   query,
   where,
-  updateDoc,
-  doc
-} from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
+  Timestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "SUA_API_KEY",
@@ -49,72 +48,58 @@ function showMenu() {
   root.innerHTML = `
     <div class="card">
       <h2>Menu</h2>
-      <button id="cadastro">Cadastrar Venda</button>
-      <button id="dashboard">Dashboard</button>
-      <button id="cobranca">Cobrança</button>
-      <button id="sair">Sair</button>
+      <button onclick="showCadastro()">Cadastrar Venda</button>
+      <button onclick="showDashboard()">Dashboard</button>
+      <button onclick="showCobranca()">Cobrança</button>
+      <button onclick="showLogin()">Sair</button>
     </div>
   `;
-  document.getElementById("cadastro").addEventListener("click", showCadastro);
-  document.getElementById("dashboard").addEventListener("click", showDashboard);
-  document.getElementById("cobranca").addEventListener("click", showCobranca);
-  document.getElementById("sair").addEventListener("click", showLogin);
 }
 
-// Parte 4 - Cadastrar Venda (com WhatsApp)
+window.showMenu = showMenu;
+window.showCadastro = showCadastro;
+window.showDashboard = showDashboard;
+window.showCobranca = showCobranca;
+
 function showCadastro() {
   root.innerHTML = `
     <div class="card">
-      <h2>Nova Venda</h2>
-      <input type="text" id="cliente" placeholder="Nome do Cliente" />
-      <input type="text" id="local" placeholder="Local da Venda" />
-      <input type="number" id="valor" placeholder="Valor (R$)" />
-      <input type="tel" id="telefone" placeholder="Telefone (ex: 5511999999999)" />
-      <select id="formaPagamento">
-        <option value="">Forma de Pagamento</option>
-        <option value="Pix">Pix</option>
-        <option value="Dinheiro">Dinheiro</option>
-        <option value="Cartão">Cartão</option>
-      </select>
-      <label>Produtos:</label>
-      <div>
-        <label><input type="checkbox" value="Trufa"> Trufa</label>
-        <label><input type="checkbox" value="Cone"> Cone</label>
-        <label><input type="checkbox" value="Brigadeiro"> Brigadeiro</label>
-      </div>
+      <h2>Cadastrar Venda</h2>
+      <input type="text" id="cliente" placeholder="Cliente" />
+      <input type="text" id="local" placeholder="Local" />
+      <input type="number" id="valor" placeholder="Valor" />
       <input type="date" id="data" />
-      <textarea id="observacao" placeholder="Observação (opcional)"></textarea>
-      <button id="salvarVenda">Salvar</button>
+      <input type="text" id="telefone" placeholder="Telefone (ex: 5511999999999)" />
+      <input type="text" id="produtos" placeholder="Produtos (separados por vírgula)" />
+      <button id="salvar">Salvar</button>
+      <button onclick="showMenu()">Voltar</button>
     </div>
   `;
 
-  document.getElementById("salvarVenda").addEventListener("click", async () => {
+  document.getElementById("salvar").addEventListener("click", async () => {
     const cliente = document.getElementById("cliente").value.trim();
     const local = document.getElementById("local").value.trim();
-    const valor = parseFloat(document.getElementById("valor").value);
-    const telefone = document.getElementById("telefone").value.trim();
-    const formaPagamento = document.getElementById("formaPagamento").value;
+    const valor = parseFloat(document.getElementById("valor").value.trim());
     const data = document.getElementById("data").value;
-    const observacao = document.getElementById("observacao").value.trim();
-    const produtosSelecionados = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+    const telefone = document.getElementById("telefone").value.trim();
+    const produtos = document.getElementById("produtos").value.trim();
 
-    if (!cliente || !local || isNaN(valor) || !formaPagamento || !data || produtosSelecionados.length === 0 || !telefone) {
-      alert("Por favor, preencha todos os campos obrigatórios.");
+    if (!cliente || !local || isNaN(valor) || !data || !telefone || !produtos) {
+      alert("Preencha todos os campos corretamente.");
       return;
     }
 
-    const snapshot = await getDocs(collection(db, "vendas"));
-    const duplicado = snapshot.docs.some(doc =>
-      doc.data().cliente === cliente &&
-      doc.data().local === local &&
-      doc.data().valor === valor &&
-      doc.data().formaPagamento === formaPagamento &&
-      doc.data().data === data &&
-      JSON.stringify(doc.data().produtos.sort()) === JSON.stringify(produtosSelecionados.sort())
-    );
+    const vendaExistente = await getDocs(query(
+      collection(db, "vendas"),
+      where("cliente", "==", cliente),
+      where("local", "==", local),
+      where("valor", "==", valor),
+      where("data", "==", data),
+      where("produtos", "==", produtos)
+    ));
 
-    if (duplicado) {
-      alert("Essa venda já foi cadastrada.");
+    if (!vendaExistente.empty) {
+      alert("Venda duplicada. Já existe esse registro.");
       return;
     }
 
@@ -122,69 +107,72 @@ function showCadastro() {
       cliente,
       local,
       valor,
-      formaPagamento,
-      produtos: produtosSelecionados,
       data,
-      status: "pendente",
-      observacao,
-      telefone
+      telefone,
+      produtos,
+      pago: false,
+      criadoEm: Timestamp.now()
     });
 
-    const mensagem = `Olá ${cliente}, aqui é da Ana Buck Doces! 🍬\n\nConfirmamos sua compra no valor de R$ ${valor.toFixed(2)} para o dia ${data}.\nForma de pagamento: ${formaPagamento}.\nProdutos: ${produtosSelecionados.join(', ')}.\n\nQualquer dúvida estamos à disposição! 💖`;
-    const link = `https://wa.me/${telefone}?text=${encodeURIComponent(mensagem)}`;
-    window.open(link, "_blank");
+    const numeroWhatsApp = telefone.replace(/\D/g, "");
+    if (numeroWhatsApp.length >= 12) {
+      const mensagem = `Olá ${cliente}, aqui está o comprovante da sua venda:\nProdutos: ${produtos}\nValor: R$ ${valor.toFixed(2)}\nData: ${data}`;
+      const url = `https://wa.me/${numeroWhatsApp}?text=${encodeURIComponent(mensagem)}`;
+      window.location.href = url;
+    } else {
+      alert("Número de telefone inválido para envio via WhatsApp.");
+    }
 
-    alert("Venda salva com sucesso!");
-    showDashboard();
+    showMenu();
   });
 }
 
-// Parte 5 - Dashboard
-function showDashboard() {
+async function showDashboard() {
+  const vendasSnap = await getDocs(collection(db, "vendas"));
+  let total = 0;
+  let totalReceber = 0;
+
+  let lista = "";
+  vendasSnap.forEach((doc) => {
+    const dados = doc.data();
+    const valor = parseFloat(dados.valor);
+    if (!isNaN(valor)) {
+      total += valor;
+      if (!dados.pago) totalReceber += valor;
+    }
+    lista += `<li>${dados.cliente} - R$ ${valor.toFixed(2)} - ${dados.pago ? "Pago" : "A receber"}</li>`;
+  });
+
   root.innerHTML = `
     <div class="card">
       <h2>Dashboard</h2>
-      <div id="totais">
-        <p>Total de Vendas: <span id="totalVendas">0</span></p>
-        <p>Valor Total: R$ <span id="valorTotal">0,00</span></p>
-        <p>A Receber: R$ <span id="aReceber">0,00</span></p>
-      </div>
-      <button id="voltar">Voltar</button>
+      <p><strong>Total de vendas:</strong> R$ ${total.toFixed(2)}</p>
+      <p><strong>A receber:</strong> R$ ${totalReceber.toFixed(2)}</p>
+      <ul>${lista}</ul>
+      <button onclick="showMenu()">Voltar</button>
     </div>
   `;
-
-  document.getElementById("voltar").addEventListener("click", showMenu);
-
-  getDocs(collection(db, "vendas")).then(snapshot => {
-    let total = 0;
-    let totalValor = 0;
-    let aReceber = 0;
-    snapshot.forEach(doc => {
-      const venda = doc.data();
-      total++;
-      totalValor += venda.valor || 0;
-      if (venda.status === "pendente") {
-        aReceber += venda.valor || 0;
-      }
-    });
-
-    document.getElementById("totalVendas").textContent = total;
-    document.getElementById("valorTotal").textContent = totalValor.toFixed(2);
-    document.getElementById("aReceber").textContent = aReceber.toFixed(2);
-  });
 }
 
-// Parte 6 - Cobranca (código mantido como no projeto original)
-function showCobranca() {
+async function showCobranca() {
+  const vendasSnap = await getDocs(collection(db, "vendas"));
+
+  let lista = "";
+  vendasSnap.forEach((doc) => {
+    const dados = doc.data();
+    if (!dados.pago) {
+      lista += `<li>${dados.cliente} - R$ ${parseFloat(dados.valor).toFixed(2)} - ${dados.data}</li>`;
+    }
+  });
+
   root.innerHTML = `
     <div class="card">
-      <h2>Cobrança</h2>
-      <p>Em breve melhorias aqui.</p>
-      <button id="voltar">Voltar</button>
+      <h2>Cobranças</h2>
+      <ul>${lista}</ul>
+      <button onclick="showMenu()">Voltar</button>
     </div>
   `;
-  document.getElementById("voltar").addEventListener("click", showMenu);
 }
 
-// Início
+// Inicia a aplicação
 showLogin();
