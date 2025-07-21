@@ -1,6 +1,13 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, collection, addDoc, getDocs, updateDoc, doc
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  updateDoc,
+  doc,
+  query,
+  where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -54,19 +61,23 @@ function showTabs(user) {
   `;
 }
 
+const produtosLista = [
+  "Cone", "Trufa", "Bolo de pote", "Pão de mel",
+  "Escondidinho de uva", "Bombom de uva", "BomBom de morango",
+  "Coxinha de morango", "Camafeu", "Caixinha", "Mousse", "Lanche natural"
+];
+
 window.showCadastro = (usuario) => {
+  const produtoOptions = produtosLista
+    .map(p => `<label><input type="checkbox" value="${p}" /> ${p}</label>`)
+    .join("");
+
   document.getElementById("conteudo").innerHTML = `
     <h2>Cadastro de Venda</h2>
     <input id="cliente" placeholder="Nome do cliente" />
     <input id="local" placeholder="Local da venda" />
     <input id="valor" placeholder="Valor (R$)" type="number" />
-    <select id="produtos" multiple size="5">
-      <option>Cone</option>
-      <option>Trufa</option>
-      <option>Brownie</option>
-      <option>Brigadeiro</option>
-      <option>Pão de mel</option>
-    </select>
+    <div><strong>Produtos vendidos:</strong>${produtoOptions}</div>
     <select id="status">
       <option value="pago">Pago</option>
       <option value="nao">Não pago</option>
@@ -82,8 +93,10 @@ window.showCadastro = (usuario) => {
     if (val === "pago") {
       html = `<select id="forma"><option>dinheiro</option><option>cartão</option><option>pix</option></select>`;
     } else if (val === "nao") {
-      html = `<input type="date" id="dataReceber" />
-              <select id="forma"><option>dinheiro</option><option>cartão</option><option>pix</option></select>`;
+      html = `
+        <input type="date" id="dataReceber" />
+        <select id="forma"><option>dinheiro</option><option>cartão</option><option>pix</option></select>
+      `;
     } else if (val === "parcial") {
       html = `
         <input type="number" id="valorParcial" placeholder="Valor recebido hoje" />
@@ -97,149 +110,126 @@ window.showCadastro = (usuario) => {
 };
 
 window.cadastrar = async (usuario) => {
-  const cliente = document.getElementById("cliente").value;
-  const local = document.getElementById("local").value;
+  const cliente = document.getElementById("cliente").value.trim();
+  const local = document.getElementById("local").value.trim();
   const valor = parseFloat(document.getElementById("valor").value);
   const status = document.getElementById("status").value;
-  const produtos = Array.from(document.getElementById("produtos").selectedOptions).map(o => o.value);
   const forma = document.getElementById("forma")?.value || "";
   const dataReceber = document.getElementById("dataReceber")?.value || "";
   const valorParcial = parseFloat(document.getElementById("valorParcial")?.value || 0);
   const faltaReceber = parseFloat(document.getElementById("falta")?.value || 0);
   const data = new Date().toISOString().split("T")[0];
+  const produtosSelecionados = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
 
-  // Bloqueio de duplicado total
   const snap = await getDocs(collection(db, "vendas"));
-  const duplicado = snap.docs.find(doc => {
+  const duplicado = snap.docs.some(doc => {
     const d = doc.data();
     return d.usuario === usuario &&
-      d.cliente === cliente &&
-      d.local === local &&
-      d.valor === valor &&
-      JSON.stringify(d.produtos || []) === JSON.stringify(produtos) &&
-      d.status === status &&
-      d.forma === forma &&
-      (d.dataReceber || "") === dataReceber &&
-      (d.valorParcial || 0) === valorParcial &&
-      (d.faltaReceber || 0) === faltaReceber &&
-      d.data === data;
+           d.cliente === cliente &&
+           d.local === local &&
+           d.valor === valor &&
+           d.status === status &&
+           JSON.stringify(d.produtosVendidos || []) === JSON.stringify(produtosSelecionados) &&
+           d.dataReceber === (status !== "pago" ? dataReceber : null) &&
+           d.data === data;
   });
 
   if (duplicado) {
-    alert("Essa venda já foi cadastrada!");
+    alert("Venda duplicada. Já existe com os mesmos dados.");
     return;
   }
 
   await addDoc(collection(db, "vendas"), {
-    usuario, cliente, local, valor, status, produtos, forma,
+    usuario, cliente, local, valor, status, forma,
     valorParcial: status === "parcial" ? valorParcial : null,
     faltaReceber: status === "parcial" ? faltaReceber : (status === "nao" ? valor : 0),
     dataReceber: status !== "pago" ? dataReceber : null,
-    data
+    data,
+    produtosVendidos: produtosSelecionados
   });
-
   alert("Venda salva!");
 };
 
-<div id="dashboard" class="p-4">
-  <h2 class="text-xl font-bold mb-4">Dashboard</h2>
-  <div class="grid grid-cols-2 gap-4">
-    <div class="bg-green-100 p-4 rounded-xl shadow">
-      <p class="text-sm text-gray-600">Total Vendido</p>
-      <p id="total-vendas" class="text-xl font-bold">R$ 0,00</p>
-    </div>
-    <div class="bg-yellow-100 p-4 rounded-xl shadow">
-      <p class="text-sm text-gray-600">Total a Receber</p>
-      <p id="total-pendente" class="text-xl font-bold">R$ 0,00</p>
-    </div>
-  </div>
-</div>
+window.showDashboard = async () => {
+  const snap = await getDocs(collection(db, "vendas"));
+  const vendas = snap.docs.map(doc => doc.data());
+  const hoje = new Date().toISOString().split("T")[0];
+  const hojeVendas = vendas.filter(v => v.data === hoje);
+  const totalHoje = hojeVendas.reduce((acc, v) => acc + v.valor, 0);
+  const aReceber = vendas.filter(v => v.status !== "pago")
+                         .reduce((acc, v) => acc + (v.faltaReceber || v.valor), 0);
 
-<div id="cobrancas" class="p-4">
-  <h2 class="text-xl font-bold mb-4 mt-6">Cobranças</h2>
-  
-  <!-- Filtro por mês -->
-  <div class="flex items-center mb-4">
-    <label for="mesFiltro" class="mr-2">Filtrar por mês:</label>
-    <input type="month" id="mesFiltro" class="border p-2 rounded" />
-    <button onclick="filtrarCobrancasPorMes()" class="ml-2 bg-blue-500 text-white px-4 py-2 rounded">Filtrar</button>
-  </div>
+  let html = `<h2>Dashboard</h2>
+    <p>Vendas hoje: ${hojeVendas.length}</p>
+    <p>Total vendido: R$ ${totalHoje.toFixed(2)}</p>
+    <p>A receber: R$ ${aReceber.toFixed(2)}</p>
+    <input type="month" id="mesSelect" />
+    <ul id="vendasMes"></ul>`;
 
-  <!-- Resultado do filtro -->
-  <div id="resumoCobrancasMes" class="mb-4 hidden">
-    <h3 class="font-bold">Resumo do mês:</h3>
-    <p id="valorTotalMes"></p>
-  </div>
+  document.getElementById("conteudo").innerHTML = html;
 
-  <!-- Lista de cobranças -->
-  <div id="listaCobrancas"></div>
-</div>
+  document.getElementById("mesSelect").addEventListener("change", e => {
+    const mes = e.target.value;
+    const filtradas = vendas.filter(v => (v.dataReceber || "").startsWith(mes));
+    const lista = filtradas.map(v => `<li>${v.dataReceber} - ${v.cliente} - ${v.local} - R$ ${v.faltaReceber || v.valor}</li>`).join("");
+    document.getElementById("vendasMes").innerHTML = lista;
+  });
+};
 
-<script>
-  async function filtrarCobrancasPorMes() {
-    const mes = document.getElementById("mesFiltro").value;
-    if (!mes) return;
-    const [ano, mesStr] = mes.split("-");
-    const mesNum = parseInt(mesStr);
+window.showCobranca = async () => {
+  const snap = await getDocs(collection(db, "vendas"));
+  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const hoje = new Date().toISOString().split("T")[0];
+  const cobrarHoje = vendas.filter(v => v.dataReceber === hoje);
 
-    const snapshot = await getDocs(collection(db, "vendas"));
-    const cobrancas = [];
-    let total = 0;
+  let html = `<h2>Cobrança</h2><h3>Cobrar hoje</h3>`;
+  if (cobrarHoje.length === 0) html += `<p>Nenhuma cobrança hoje.</p>`;
+  cobrarHoje.forEach(v => {
+    html += `
+      <div style="border:1px solid #ccc;padding:10px;margin-bottom:10px">
+        <p><strong>${v.cliente}</strong> - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>
+        <button onclick="marcarPago('${v.id}')">Cobrei - já pago</button>
+        <button onclick="naoPago('${v.id}')">Cobrei - não pago</button>
+        <button onclick="reagendar('${v.id}')">Reagendar cobrança</button>
+        <div id="reagendar-${v.id}"></div>
+      </div>
+    `;
+  });
 
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      const dataVenda = new Date(data.data);
-      if (
-        dataVenda.getMonth() + 1 === mesNum &&
-        dataVenda.getFullYear() === parseInt(ano)
-      ) {
-        cobrancas.push({ id: doc.id, ...data });
-        total += parseFloat(data.valor);
-      }
-    });
+  html += `<hr><input type="month" id="mesFiltro" /><div id="cobMes"></div>`;
+  document.getElementById("conteudo").innerHTML = html;
 
-    document.getElementById("resumoCobrancasMes").classList.remove("hidden");
-    document.getElementById("valorTotalMes").innerText = `Total: R$ ${total.toFixed(2)}`;
+  document.getElementById("mesFiltro").addEventListener("change", e => {
+    const mes = e.target.value;
+    const cobrancas = vendas.filter(v => (v.dataReceber || "").startsWith(mes));
+    const lista = cobrancas.map(v => `<p>${v.dataReceber} - ${v.cliente} - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>`).join("");
+    document.getElementById("cobMes").innerHTML = lista || "<p>Nenhuma cobrança encontrada.</p>";
+  });
+};
 
-    const lista = document.getElementById("listaCobrancas");
-    lista.innerHTML = "";
+window.marcarPago = async (id) => {
+  const ref = doc(db, "vendas", id);
+  await updateDoc(ref, { status: "pago", dataReceber: null, faltaReceber: 0 });
+  alert("Status atualizado para pago");
+  showCobranca();
+};
 
-    cobrancas.forEach(c => {
-      const div = document.createElement("div");
-      div.className = "border p-3 rounded mb-2 shadow";
-      div.innerHTML = `
-        <p><strong>Cliente:</strong> ${c.cliente}</p>
-        <p><strong>Valor:</strong> R$ ${c.valor}</p>
-        <p><strong>Data:</strong> ${c.data}</p>
-        <div class="flex gap-2 mt-2">
-          <button onclick="atualizarStatusCobranca('${c.id}', 'pago')" class="bg-green-500 text-white px-3 py-1 rounded">Cobrei - já pago</button>
-          <button onclick="atualizarStatusCobranca('${c.id}', 'naoPago')" class="bg-red-500 text-white px-3 py-1 rounded">Cobrei - não pago</button>
-          <button onclick="abrirReagendar('${c.id}')" class="bg-yellow-400 text-white px-3 py-1 rounded">Reagendar cobrança</button>
-        </div>
-        <div id="reagendar-${c.id}" class="mt-2 hidden">
-          <input type="date" id="novaData-${c.id}" class="border p-1 rounded" />
-          <button onclick="salvarReagendamento('${c.id}')" class="bg-blue-500 text-white px-2 py-1 rounded">Salvar</button>
-        </div>
-      `;
-      lista.appendChild(div);
-    });
-  }
+window.naoPago = async (id) => {
+  alert("A venda continua marcada como não paga.");
+};
 
-  function abrirReagendar(id) {
-    document.getElementById(`reagendar-${id}`).classList.remove("hidden");
-  }
+window.reagendar = (id) => {
+  document.getElementById(`reagendar-${id}`).innerHTML = `
+    <input type="date" id="novaData-${id}" />
+    <button onclick="salvarReagendamento('${id}')">Salvar nova data</button>
+  `;
+};
 
-  async function salvarReagendamento(id) {
-    const novaData = document.getElementById(`novaData-${id}`).value;
-    if (!novaData) return;
-    await updateDoc(doc(db, "vendas", id), { data: novaData });
-    alert("Data reagendada com sucesso!");
-    filtrarCobrancasPorMes();
-  }
-
-  async function atualizarStatusCobranca(id, status) {
-    await updateDoc(doc(db, "vendas", id), { status });
-    alert("Status atualizado!");
-    filtrarCobrancasPorMes();
-  }
-</script>
+window.salvarReagendamento = async (id) => {
+  const novaData = document.getElementById(`novaData-${id}`).value;
+  if (!novaData) return alert("Selecione a nova data");
+  const ref = doc(db, "vendas", id);
+  await updateDoc(ref, { dataReceber: novaData });
+  alert("Data reagendada com sucesso");
+  showCobranca();
+};
