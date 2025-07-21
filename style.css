@@ -1,88 +1,74 @@
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #fdf5f7; /* Fundo rose claro */
+  font-family: Arial, sans-serif;
+  background-color: #fff0f5;
   margin: 0;
   padding: 0;
-  text-align: center;
-  color: #4a2c2a; /* Marrom suave */
+  color: #4a0f3e;
 }
 
-#logo-container {
-  padding: 20px 0;
+.login, .tabs, #conteudo {
+  max-width: 400px;
+  margin: 20px auto;
+  padding: 15px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 0 10px rgba(200, 100, 150, 0.2);
 }
 
 .logo {
+  display: block;
+  margin: 0 auto 20px;
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.3);
   object-fit: cover;
-  margin-bottom: 10px;
-}
-
-h1 {
-  font-size: 2em;
-  color: #a47174; /* Rose escuro */
-  margin-bottom: 10px;
-}
-
-.card {
-  background-color: #fef0f2; /* fundo levemente rosado */
-  border: 1px solid #f1d4d8;
-  padding: 20px;
-  margin: 15px auto;
-  max-width: 400px;
-  border-radius: 15px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
 input, select, button {
-  display: block;
-  margin: 10px auto;
+  width: 100%;
   padding: 10px;
-  width: 90%;
+  margin-top: 10px;
+  border: 1px solid #e6b5d0;
   border-radius: 8px;
-  border: 1px solid #d4a5a5; /* tom rose médio */
-  font-size: 1em;
-  background-color: #fffafc;
-  color: #4a2c2a;
+  font-size: 16px;
+  box-sizing: border-box;
 }
 
 button {
-  background-color: #d8a7a7; /* tom rose mais escuro */
+  background-color: #e06aa6;
   color: white;
+  font-weight: bold;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  border: none;
+  transition: background 0.3s ease;
 }
 
 button:hover {
-  background-color: #b88787;
+  background-color: #d15596;
 }
 
-.calendar {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
+h2 {
+  color: #b03279;
+  text-align: center;
+}
+
+.tabs {
+  display: flex;
   gap: 10px;
-  margin: 20px 0;
+  justify-content: space-between;
 }
 
-.calendar-day {
-  background-color: #fbecee;
-  border: 1px solid #f1d1d6;
-  border-radius: 8px;
-  padding: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  color: #5e3a3a;
+.tabs button {
+  flex: 1;
 }
 
-.calendar-day:hover {
-  background-color: #e6c0c3;
-  color: white;
+ul {
+  list-style: none;
+  padding-left: 0;
 }
 
-.calendar-day-value {
-  font-weight: bold;
-  margin-top: 5px;
-  color: #a47174;
+li {
+  padding: 8px 0;
+  border-bottom: 1px solid #f0cbe0;
 }
