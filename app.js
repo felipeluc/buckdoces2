@@ -2,19 +2,15 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import {
   getFirestore,
   collection,
-  addDoc,
-  getDocs,
-  updateDoc,
-  doc,
-  query,
-  where
+  getDocs
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// Configuração do Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDGg5JtE_7gVRhTlRY30bpXsmMpvPEQ3tw",
   authDomain: "buckdoces.firebaseapp.com",
   projectId: "buckdoces",
-  storageBucket: "buckdoces.firebasestorage.app",
+  storageBucket: "buckdoces.appspot.com",
   messagingSenderId: "781727917443",
   appId: "1:781727917443:web:c9709b3813d28ea60982b6"
 };
@@ -22,84 +18,62 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-window.showCobranca = async () => {
+// Estrutura inicial
+const root = document.getElementById("root");
+root.innerHTML = `
+  <h2>Calendário de Cobranças</h2>
+  <input type="month" id="mesSelect" />
+  <div id="calendario"></div>
+  <div class="day-details" id="detalhesDia"></div>
+`;
+
+// Evento de mudança do mês
+document.getElementById("mesSelect").addEventListener("change", async (e) => {
+  const mes = e.target.value;
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  const hoje = new Date().toISOString().split("T")[0];
-  const cobrarHoje = vendas.filter(v => v.dataReceber === hoje);
+  const dias = {};
 
-  let html = `<h2>Cobrança</h2><h3>Cobrar hoje</h3>`;
-  if (cobrarHoje.length === 0) html += `<p>Nenhuma cobrança hoje.</p>`;
-  cobrarHoje.forEach(v => {
-    html += `
-      <div style="border:1px solid #ccc;padding:10px;margin-bottom:10px">
-        <p><strong>${v.cliente}</strong> - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>
-        <button onclick="marcarPago('${v.id}')">Cobrei - já pago</button>
-        <button onclick="naoPago('${v.id}')">Cobrei - não pago</button>
-        <button onclick="reagendar('${v.id}')">Reagendar cobrança</button>
-        <div id="reagendar-${v.id}"></div>
-      </div>
-    `;
-  });
-
-  html += `<hr><input type="month" id="mesFiltro" /><div id="calendario"></div><div id="infoDia"></div>`;
-  document.getElementById("conteudo").innerHTML = html;
-
-  document.getElementById("mesFiltro").addEventListener("change", e => {
-    const mes = e.target.value;
-    gerarCalendario(mes, vendas);
-  });
-};
-
-function gerarCalendario(mesSelecionado, vendas) {
-  const [ano, mes] = mesSelecionado.split("-").map(Number);
-  const primeiroDia = new Date(ano, mes - 1, 1);
-  const ultimoDia = new Date(ano, mes, 0);
-  const totalDias = ultimoDia.getDate();
-
-  let calendario = '<div style="display:grid;grid-template-columns:repeat(7, 1fr);gap:10px">';
-  for (let i = 1; i < primeiroDia.getDay(); i++) {
-    calendario += `<div></div>`;
-  }
-
-  for (let dia = 1; dia <= totalDias; dia++) {
-    const diaStr = `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
-    const doDia = vendas.filter(v => v.dataReceber === diaStr);
-    const total = doDia.reduce((acc, v) => acc + (v.faltaReceber || v.valor), 0);
-
-    calendario += `
-      <div onclick="mostrarDetalhesDia('${diaStr}')"
-        style="border:1px solid #ccc;padding:5px;cursor:pointer;background:#fff">
-        <strong>${dia}</strong><br/>
-        <span style="font-size:12px">R$ ${total.toFixed(2)}</span>
-      </div>
-    `;
-  }
-
-  calendario += `</div>`;
-  document.getElementById("calendario").innerHTML = calendario;
-}
-
-window.mostrarDetalhesDia = (diaStr) => {
-  getDocs(collection(db, "vendas")).then(snap => {
-    const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    const doDia = vendas.filter(v => v.dataReceber === diaStr);
-    let html = `<h3>Cobranças de ${diaStr}</h3>`;
-    if (doDia.length === 0) {
-      html += `<p>Nenhuma cobrança nesse dia.</p>`;
-    } else {
-      doDia.forEach(v => {
-        html += `
-          <div style="border:1px solid #ccc;padding:10px;margin-bottom:10px">
-            <p><strong>${v.cliente}</strong> - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>
-            <button onclick="marcarPago('${v.id}')">Cobrei - já pago</button>
-            <button onclick="naoPago('${v.id}')">Cobrei - não pago</button>
-            <button onclick="reagendar('${v.id}')">Reagendar cobrança</button>
-            <div id="reagendar-${v.id}"></div>
-          </div>
-        `;
-      });
+  vendas.forEach(v => {
+    if ((v.dataReceber || "").startsWith(mes)) {
+      if (!dias[v.dataReceber]) dias[v.dataReceber] = [];
+      dias[v.dataReceber].push(v);
     }
-    document.getElementById("infoDia").innerHTML = html;
   });
-};
+
+  const [ano, mesNum] = mes.split("-").map(Number);
+  const primeiro = new Date(ano, mesNum - 1, 1);
+  const ultimo = new Date(ano, mesNum, 0);
+  const inicioSemana = primeiro.getDay();
+  const totalDias = ultimo.getDate();
+  let html = "";
+
+  for (let i = 0; i < inicioSemana; i++) {
+    html += `<div></div>`;
+  }
+
+  for (let d = 1; d <= totalDias; d++) {
+    const data = `${mes}-${String(d).padStart(2, "0")}`;
+    const valor = (dias[data] || []).reduce((acc, v) => acc + (v.faltaReceber || v.valor), 0);
+    html += `<div class="calendar-day" onclick="window.abrirDetalhes('${data}')">${d}<div class="amount">R$ ${valor.toFixed(2)}</div></div>`;
+  }
+
+  document.getElementById("calendario").innerHTML = `<div class="calendar">${html}</div>`;
+
+  window.abrirDetalhes = (dia) => {
+    const registros = dias[dia] || [];
+    if (!registros.length) {
+      document.getElementById("detalhesDia").innerHTML = "<p>Sem cobranças</p>";
+      return;
+    }
+    const detalhes = registros.map(v => `
+      <div class="day-card">
+        <p><strong>${v.cliente}</strong> - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>
+        <button onclick="alert('Cobrei - já pago')">Cobrei - Já pago</button>
+        <button onclick="alert('Cobrei - não pago')">Cobrei - Não pago</button>
+        <button onclick="alert('Reagendar cobrança')">Reagendar</button>
+      </div>
+    `).join("");
+    document.getElementById("detalhesDia").innerHTML = detalhes;
+  };
+});
