@@ -1,12 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  getDocs,
-  query,
-  where,
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDGg5JtE_7gVRhTlRY30bpXsmMpvPEQ3tw",
@@ -14,7 +7,7 @@ const firebaseConfig = {
   projectId: "buckdoces",
   storageBucket: "buckdoces.firebasestorage.app",
   messagingSenderId: "781727917443",
-  appId: "1:781727917443:web:c9709b3813d28ea60982b6",
+  appId: "1:781727917443:web:c9709b3813d28ea60982b6"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -35,7 +28,7 @@ document.getElementById("root").innerHTML = `
 
 const senhas = {
   "Ana Buck": "Ana1234",
-  "João Buck": "João1234",
+  "João Buck": "João1234"
 };
 
 window.login = () => {
@@ -59,31 +52,32 @@ function showTabs(user) {
   `;
 }
 
-const produtosLista = [
-  "Cone", "Trufa", "Bolo de pote", "Pão de mel", "Escondidinho de uva",
-  "Bombom de uva", "BomBom de morango", "Coxinha de morango", "Camafeu",
-  "Caixinha", "Mousse", "Lanche natural"
-];
-
 window.showCadastro = (usuario) => {
-  const produtosCheckboxes = produtosLista.map(p => 
-    `<label><input type="checkbox" name="produtos" value="${p}" /> ${p}</label>`).join("");
-
   document.getElementById("conteudo").innerHTML = `
     <h2>Cadastro de Venda</h2>
     <input id="cliente" placeholder="Nome do cliente" />
     <input id="local" placeholder="Local da venda" />
     <input id="valor" placeholder="Valor (R$)" type="number" />
+    <select id="vendidos" multiple>
+      <option>Cone</option>
+      <option>Trufa</option>
+      <option>Bolo de pote</option>
+      <option>Pão de mel</option>
+      <option>Escondidinho de uva</option>
+      <option>Bombom de uva</option>
+      <option>Bombom de morango</option>
+      <option>Coxinha de morango</option>
+      <option>Camafeu</option>
+      <option>Caixinha</option>
+      <option>Mousse</option>
+      <option>Lanche natural</option>
+    </select>
     <select id="status">
       <option value="pago">Pago</option>
       <option value="nao">Não pago</option>
       <option value="parcial">Parcial</option>
     </select>
     <div id="extras"></div>
-    <fieldset>
-      <legend>O que foi vendido?</legend>
-      ${produtosCheckboxes}
-    </fieldset>
     <button onclick="cadastrar('${usuario}')">Salvar</button>
   `;
 
@@ -120,31 +114,94 @@ window.cadastrar = async (usuario) => {
   const faltaReceber = parseFloat(document.getElementById("falta")?.value || 0);
   const data = new Date().toISOString().split("T")[0];
 
-  const produtosSelecionados = Array.from(document.querySelectorAll("input[name='produtos']:checked"))
-                                    .map(el => el.value);
+  const vendidosSelect = document.getElementById("vendidos");
+  const vendidos = Array.from(vendidosSelect.selectedOptions).map(opt => opt.value);
 
-  if (!cliente || !valor || produtosSelecionados.length === 0) {
-    alert("Preencha todos os campos obrigatórios e selecione ao menos um produto.");
+  if (!cliente || !local || !valor || vendidos.length === 0) {
+    alert("Preencha todos os campos e selecione ao menos um produto.");
     return;
   }
 
-  // Verifica se já existe venda com mesmo cliente e mesma data
-  const q = query(collection(db, "vendas"), where("cliente", "==", cliente), where("data", "==", data));
-  const snap = await getDocs(q);
-  if (!snap.empty) {
-    alert("Venda já cadastrada hoje para esse cliente!");
+  // 🔒 Verificar duplicidade
+  const hojeQuery = query(
+    collection(db, "vendas"),
+    where("cliente", "==", cliente),
+    where("local", "==", local),
+    where("data", "==", data)
+  );
+  const existente = await getDocs(hojeQuery);
+  if (!existente.empty) {
+    alert("Já existe um cadastro hoje com esse cliente e local.");
     return;
   }
 
   await addDoc(collection(db, "vendas"), {
     usuario, cliente, local, valor, status, forma,
+    vendidos,
     valorParcial: status === "parcial" ? valorParcial : null,
     faltaReceber: status === "parcial" ? faltaReceber : (status === "nao" ? valor : 0),
     dataReceber: status !== "pago" ? dataReceber : null,
-    produtos: produtosSelecionados,
     data
   });
 
   alert("Venda salva!");
-  showTabs(usuario);
+};
+
+window.showDashboard = async () => {
+  const snap = await getDocs(collection(db, "vendas"));
+  const vendas = snap.docs.map(doc => doc.data());
+  const hoje = new Date().toISOString().split("T")[0];
+  const hojeVendas = vendas.filter(v => v.data === hoje);
+  const totalHoje = hojeVendas.reduce((acc, v) => acc + v.valor, 0);
+  const aReceber = vendas.filter(v => v.status !== "pago")
+                         .reduce((acc, v) => acc + (v.faltaReceber || v.valor), 0);
+
+  let html = `<h2>Dashboard</h2>
+    <p>Vendas hoje: ${hojeVendas.length}</p>
+    <p>Total vendido: R$ ${totalHoje.toFixed(2)}</p>
+    <p>A receber: R$ ${aReceber.toFixed(2)}</p>
+    <select id="mesSelect"><option value="">Selecionar mês</option>`;
+
+  for (let i = 1; i <= 12; i++) {
+    const m = i.toString().padStart(2, '0');
+    html += `<option value="${m}">${m}</option>`;
+  }
+  html += `</select><ul id="vendasMes"></ul>`;
+
+  document.getElementById("conteudo").innerHTML = html;
+
+  document.getElementById("mesSelect").addEventListener("change", e => {
+    const mes = e.target.value;
+    const filtradas = vendas.filter(v => (v.dataReceber || "").includes(`-${mes}-`));
+    const lista = filtradas.map(v => `<li>${v.dataReceber} - ${v.cliente} - ${v.local} - R$ ${v.faltaReceber || v.valor}</li>`).join("");
+    document.getElementById("vendasMes").innerHTML = lista;
+  });
+};
+
+window.showCobranca = async () => {
+  const snap = await getDocs(collection(db, "vendas"));
+  const vendas = snap.docs.map(doc => doc.data());
+  const hoje = new Date().toISOString().split("T")[0];
+  const cobrarHoje = vendas.filter(v => v.dataReceber === hoje);
+
+  let html = `<h2>Cobrança</h2>
+    <h3>Cobrar hoje</h3>
+    ${cobrarHoje.map(v => `<p>${v.cliente} - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>`).join("")}
+    <select id="mesFiltro"><option value="">Filtrar mês</option>`;
+
+  for (let i = 1; i <= 12; i++) {
+    const m = i.toString().padStart(2, '0');
+    html += `<option value="${m}">${m}</option>`;
+  }
+
+  html += `</select><div id="cobMes"></div>`;
+
+  document.getElementById("conteudo").innerHTML = html;
+
+  document.getElementById("mesFiltro").addEventListener("change", e => {
+    const mes = e.target.value;
+    const cobrancas = vendas.filter(v => (v.dataReceber || "").includes(`-${mes}-`));
+    const lista = cobrancas.map(v => `<p>${v.dataReceber} - ${v.cliente} - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>`).join("");
+    document.getElementById("cobMes").innerHTML = lista;
+  });
 };
