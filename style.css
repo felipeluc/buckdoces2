@@ -1,109 +1,109 @@
 body {
   font-family: Arial, sans-serif;
   margin: 0;
-  padding: 0;
-  background: #fffaf8;
+  padding: 1rem;
+  background-color: #fff0f5;
   color: #333;
 }
 
-h1, h2, h3 {
+h1 {
   text-align: center;
-}
-
-#logo-container {
-  text-align: center;
+  color: #b22222;
   margin-top: 1rem;
 }
 
-#logo {
-  width: 180px;
-  height: auto;
-  border-radius: 12px;
+h2, h3 {
+  color: #8b0000;
 }
 
 .card {
-  background: #fff;
-  margin: 1rem auto;
+  background-color: #fff;
+  border-radius: 12px;
   padding: 1rem;
-  max-width: 400px;
-  border-radius: 10px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  margin: 1rem auto;
+  max-width: 500px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 input, select, button {
   display: block;
   width: 100%;
-  padding: 10px;
-  margin-top: 10px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
+  margin: 0.5rem 0;
+  padding: 0.6rem;
   font-size: 1rem;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
+input[type="checkbox"] {
+  display: inline-block;
+  width: auto;
+  margin-right: 6px;
+}
+
+label {
+  display: block;
+  margin: 4px 0;
 }
 
 button {
-  background-color: #d6336c;
+  background-color: #b22222;
   color: white;
+  border: none;
   cursor: pointer;
   transition: background-color 0.3s ease;
 }
 
 button:hover {
-  background-color: #b02759;
+  background-color: #8b0000;
 }
 
 .calendar {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
+  gap: 0.5rem;
   margin-top: 1rem;
 }
 
 .calendar-day {
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  background-color: #fffafa;
+  border: 1px solid #dcdcdc;
+  border-radius: 8px;
   padding: 0.5rem;
   text-align: center;
-  background: #fdf3f5;
   cursor: pointer;
+  transition: background-color 0.2s ease;
 }
 
 .calendar-day:hover {
-  background-color: #ffe6ec;
+  background-color: #ffe4e1;
 }
 
 .calendar-day-value {
-  font-weight: bold;
-  color: #d6336c;
+  font-size: 0.9rem;
+  color: #b22222;
   margin-top: 4px;
 }
 
-#conteudo {
-  padding: 0 1rem;
+#logo-container {
+  text-align: center;
+  margin-bottom: 1rem;
 }
 
-label {
-  display: block;
-  margin: 5px 0;
+#logo {
+  width: 150px;
+  height: auto;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
 }
 
-/* Destaque para cobranças vencidas */
-.card.vencida {
-  border: 2px solid red;
-  background-color: #ffe5e5;
-}
+@media screen and (max-width: 600px) {
+  .card {
+    margin: 0.5rem;
+    padding: 0.8rem;
+  }
 
-/* Estilo para campo de telefone */
-input[type="tel"] {
-  border: 1px solid #aaa;
-}
-
-/* Botão WhatsApp personalizado (caso deseje separar no futuro) */
-.btn-whatsapp {
-  background-color: #25D366;
-  color: white;
-  font-weight: bold;
-}
-
-.btn-whatsapp:hover {
-  background-color: #1ebe5a;
+  h1 {
+    font-size: 1.5rem;
+  }
 }
