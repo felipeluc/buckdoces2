@@ -173,6 +173,141 @@ async function showCobranca() {
     </div>
   `;
 }
+// Adição ao projeto original BuckDoces - Aba Agenda
+// (este código deve ser adicionado ao app.js original, sem alterar o restante do sistema)
 
+function showAgenda() {
+  root.innerHTML = `
+    <div class="card">
+      <h2>Agenda de Clientes</h2>
+      <input type="text" id="searchCliente" placeholder="Buscar cliente pelo nome..." />
+      <div id="listaClientes"></div>
+    </div>
+    <div id="detalhesCliente"></div>
+  `;
+
+  const searchInput = document.getElementById("searchCliente");
+  const listaClientesDiv = document.getElementById("listaClientes");
+  const detalhesDiv = document.getElementById("detalhesCliente");
+
+  db.collection("vendas").onSnapshot((snapshot) => {
+    const clientesPorTelefone = {};
+    snapshot.docs.forEach((doc) => {
+      const venda = doc.data();
+      const telefone = venda.telefone || "sem-telefone";
+      if (!clientesPorTelefone[telefone]) {
+        clientesPorTelefone[telefone] = {
+          nome: venda.cliente,
+          telefone,
+          vendas: [],
+        };
+      }
+      clientesPorTelefone[telefone].vendas.push({ id: doc.id, ...venda });
+    });
+
+    renderClientes(Object.values(clientesPorTelefone));
+
+    searchInput.addEventListener("input", () => {
+      const termo = searchInput.value.toLowerCase();
+      const filtrados = Object.values(clientesPorTelefone).filter((c) =>
+        c.nome.toLowerCase().includes(termo)
+      );
+      renderClientes(filtrados);
+    });
+  });
+
+  function renderClientes(clientes) {
+    listaClientesDiv.innerHTML = "";
+    clientes.forEach((cliente) => {
+      const btn = document.createElement("button");
+      btn.textContent = `${cliente.nome} (${cliente.telefone})`;
+      btn.onclick = () => mostrarDetalhes(cliente);
+      listaClientesDiv.appendChild(btn);
+    });
+  }
+
+  function mostrarDetalhes(cliente) {
+    let total = 0;
+    detalhesDiv.innerHTML = `
+      <div class="card">
+        <h3>Compras de ${cliente.nome}</h3>
+        ${cliente.vendas
+          .map((venda) => {
+            total += Number(venda.valor || 0);
+            const produtos = venda.produtos ? venda.produtos.join(", ") : "";
+            const status = venda.statusPagamento || "Não informado";
+            const dataPg = venda.dataPagamento || "-";
+            return `
+              <div class="day-card">
+                <p><strong>Data:</strong> ${venda.data}</p>
+                <p><strong>Local:</strong> ${venda.local}</p>
+                <p><strong>Valor:</strong> R$ ${venda.valor}</p>
+                <p><strong>Produtos:</strong> ${produtos}</p>
+                <p><strong>Forma de Pagamento:</strong> ${venda.pagamento}</p>
+                <p><strong>Status:</strong> ${status}</p>
+                <p><strong>Pagamento programado:</strong> ${dataPg}</p>
+                <button onclick="editarVenda('${venda.id}')">Editar</button>
+              </div>`;
+          })
+          .join("")}
+        <h3>Total: R$ ${total.toFixed(2)}</h3>
+      </div>
+    `;
+  }
+}
+
+window.editarVenda = function (idVenda) {
+  db.collection("vendas")
+    .doc(idVenda)
+    .get()
+    .then((doc) => {
+      const venda = doc.data();
+      const container = document.createElement("div");
+      container.classList.add("card");
+      container.innerHTML = `
+        <h3>Editar Venda</h3>
+        <p><strong>Cliente:</strong> ${venda.cliente}</p>
+        <label>Status de Pagamento:</label>
+        <select id="statusPagamento">
+          <option ${venda.statusPagamento === "Pago" ? "selected" : ""}>Pago</option>
+          <option ${venda.statusPagamento === "Parcial" ? "selected" : ""}>Parcial</option>
+          <option ${venda.statusPagamento === "Não Pago" ? "selected" : ""}>Não Pago</option>
+        </select>
+        <label>Valor pago (se parcial):</label>
+        <input type="number" id="valorParcial" value="" placeholder="Ex: 25.00" />
+        <label>Nova data para pagamento:</label>
+        <input type="date" id="novaDataPagamento" />
+        <button onclick="salvarEdicaoVenda('${idVenda}')">Salvar</button>
+      `;
+      document.getElementById("detalhesCliente").appendChild(container);
+    });
+};
+
+window.salvarEdicaoVenda = function (idVenda) {
+  const status = document.getElementById("statusPagamento").value;
+  const valorParcial = parseFloat(document.getElementById("valorParcial").value);
+  const novaData = document.getElementById("novaDataPagamento").value;
+  const updateData = {
+    statusPagamento: status,
+  };
+
+  if (status === "Parcial" && !isNaN(valorParcial)) {
+    updateData.valorPago = valorParcial;
+    updateData.valorRestante = firebase.firestore.FieldValue.increment(-valorParcial);
+    updateData.dataPagamento = novaData || null;
+  } else if (status === "Pago") {
+    updateData.dataPagamento = new Date().toISOString().split("T")[0];
+  } else if (novaData) {
+    updateData.dataPagamento = novaData;
+  }
+
+  db.collection("vendas")
+    .doc(idVenda)
+    .update(updateData)
+    .then(() => {
+      alert("Venda atualizada com sucesso!");
+      showAgenda();
+    });
+};
 // Inicia a aplicação
 showLogin();
