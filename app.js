@@ -5,9 +5,7 @@ import {
   addDoc,
   getDocs,
   updateDoc,
-  doc,
-  query,
-  where
+  doc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -196,15 +194,45 @@ window.showCobranca = async () => {
     `;
   });
 
-  html += `<hr><input type="month" id="mesFiltro" /><div id="cobMes"></div>`;
+  html += `
+    <hr><input type="month" id="mesFiltro" />
+    <div id="calendarioCob"></div>
+    <div id="detalhesDia"></div>
+  `;
   document.getElementById("conteudo").innerHTML = html;
 
   document.getElementById("mesFiltro").addEventListener("change", e => {
     const mes = e.target.value;
+    const dias = {};
     const cobrancas = vendas.filter(v => (v.dataReceber || "").startsWith(mes));
-    const lista = cobrancas.map(v => `<p>${v.dataReceber} - ${v.cliente} - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>`).join("");
-    document.getElementById("cobMes").innerHTML = lista || "<p>Nenhuma cobrança encontrada.</p>";
+    cobrancas.forEach(v => {
+      if (!dias[v.dataReceber]) dias[v.dataReceber] = 0;
+      dias[v.dataReceber] += v.faltaReceber || v.valor;
+    });
+
+    const diasHtml = Object.entries(dias).map(([data, total]) =>
+      `<div style="margin:5px 0"><button onclick="detalharDia('${data}')">${data} - R$ ${total.toFixed(2)}</button></div>`
+    ).join("");
+
+    document.getElementById("calendarioCob").innerHTML = diasHtml || "<p>Sem cobranças neste mês.</p>";
   });
+
+  window.detalharDia = (data) => {
+    const detalhes = vendas.filter(v => v.dataReceber === data);
+    let html = `<h3>Detalhes de ${data}</h3>`;
+    detalhes.forEach(v => {
+      html += `
+        <div style="border:1px solid #ccc;padding:10px;margin-bottom:10px">
+          <p><strong>${v.cliente}</strong> - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>
+          <button onclick="marcarPago('${v.id}')">Cobrei - já pago</button>
+          <button onclick="naoPago('${v.id}')">Cobrei - não pago</button>
+          <button onclick="reagendar('${v.id}')">Reagendar</button>
+          <div id="reagendar-${v.id}"></div>
+        </div>
+      `;
+    });
+    document.getElementById("detalhesDia").innerHTML = html;
+  };
 };
 
 window.marcarPago = async (id) => {
