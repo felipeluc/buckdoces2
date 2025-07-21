@@ -1,12 +1,5 @@
-// PARTE 1 - INICIALIZAÇÃO E AUTENTICAÇÃO
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-import {
-  getAuth,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  onAuthStateChanged,
-  signOut,
-} from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
+const root = document.getElementById("app");
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
 import {
   getFirestore,
   collection,
@@ -16,8 +9,8 @@ import {
   where,
   doc,
   updateDoc,
-  deleteDoc,
-} from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+  deleteDoc
+} from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "SUA_API_KEY",
@@ -25,84 +18,44 @@ const firebaseConfig = {
   projectId: "SEU_PROJECT_ID",
   storageBucket: "SEU_BUCKET.appspot.com",
   messagingSenderId: "SEU_SENDER_ID",
-  appId: "SEU_APP_ID",
+  appId: "SEU_APP_ID"
 };
 
-const appFirebase = initializeApp(firebaseConfig);
-const auth = getAuth(appFirebase);
-const db = getFirestore(appFirebase);
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-const app = document.getElementById("root");
-
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    showMenu();
-  } else {
-    showLogin();
-  }
-});
+// Estado global do usuário
+let usuarioAtual = "";
 
 function showLogin() {
-  app.innerHTML = `
+  root.innerHTML = `
     <div class="card">
       <h2>Login</h2>
-      <input type="email" id="loginEmail" placeholder="Email" />
-      <input type="password" id="loginPassword" placeholder="Senha" />
-      <button onclick="login()">Entrar</button>
-      <p>ou</p>
-      <button onclick="showRegister()">Criar Conta</button>
+      <input type="text" id="usuario" placeholder="Digite seu nome de usuário" />
+      <button onclick="fazerLogin()">Entrar</button>
     </div>
   `;
 }
 
-function showRegister() {
-  app.innerHTML = `
-    <div class="card">
-      <h2>Cadastro</h2>
-      <input type="email" id="registerEmail" placeholder="Email" />
-      <input type="password" id="registerPassword" placeholder="Senha" />
-      <button onclick="register()">Cadastrar</button>
-      <p>ou</p>
-      <button onclick="showLogin()">Voltar</button>
-    </div>
-  `;
-}
-
-window.login = async function () {
-  const email = document.getElementById("loginEmail").value;
-  const password = document.getElementById("loginPassword").value;
-  try {
-    await signInWithEmailAndPassword(auth, email, password);
-  } catch (error) {
-    alert("Erro ao logar: " + error.message);
+window.fazerLogin = function () {
+  const usuario = document.getElementById("usuario").value.trim();
+  if (!usuario) {
+    alert("Digite seu nome de usuário.");
+    return;
   }
-};
-
-window.register = async function () {
-  const email = document.getElementById("registerEmail").value;
-  const password = document.getElementById("registerPassword").value;
-  try {
-    await createUserWithEmailAndPassword(auth, email, password);
-    alert("Conta criada com sucesso!");
-    showLogin();
-  } catch (error) {
-    alert("Erro ao cadastrar: " + error.message);
-  }
-};
-
-window.logout = async function () {
-  await signOut(auth);
+  usuarioAtual = usuario;
+  showMenu();
 };
 
 function showMenu() {
-  app.innerHTML = `
+  root.innerHTML = `
     <div class="card">
-      <h2>Menu</h2>
+      <h2>Bem-vindo, ${usuarioAtual}</h2>
       <button onclick="showCadastro()">Cadastrar Venda</button>
       <button onclick="showDashboard()">Dashboard</button>
       <button onclick="showCobranca()">Cobrança</button>
       <button onclick="showAgenda()">Agenda</button>
-      <button onclick="logout()">Sair</button>
+      <button onclick="showLogin()">Sair</button>
     </div>
   `;
 }
