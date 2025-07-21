@@ -1,74 +1,80 @@
 body {
-  font-family: Arial, sans-serif;
-  background-color: #fff0f5;
   margin: 0;
-  padding: 0;
-  color: #4a0f3e;
+  font-family: "Segoe UI", sans-serif;
+  background-color: #fff0f5;
+  color: #4a001f;
 }
 
-.login, .tabs, #conteudo {
-  max-width: 400px;
-  margin: 20px auto;
-  padding: 15px;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 0 10px rgba(200, 100, 150, 0.2);
+.app-container {
+  text-align: center;
+  padding: 1rem;
 }
 
 .logo {
-  display: block;
-  margin: 0 auto 20px;
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  box-shadow: 0 0 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   object-fit: cover;
+  margin-bottom: 1rem;
 }
 
-input, select, button {
-  width: 100%;
-  padding: 10px;
-  margin-top: 10px;
-  border: 1px solid #e6b5d0;
-  border-radius: 8px;
-  font-size: 16px;
-  box-sizing: border-box;
+.card {
+  background-color: #ffe4ed;
+  padding: 1.5rem;
+  margin: 1rem auto;
+  max-width: 500px;
+  border-radius: 20px;
+  box-shadow: 0 2px 6px rgba(100, 0, 50, 0.2);
+  text-align: left;
 }
 
-button {
-  background-color: #e06aa6;
-  color: white;
-  font-weight: bold;
-  cursor: pointer;
+.card button {
+  background-color: #f06292;
   border: none;
-  transition: background 0.3s ease;
+  color: white;
+  padding: 0.7rem 1.2rem;
+  margin: 0.3rem;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: bold;
 }
 
-button:hover {
-  background-color: #d15596;
+.card button:hover {
+  background-color: #ec407a;
 }
 
-h2 {
-  color: #b03279;
+input, select {
+  width: 100%;
+  padding: 0.6rem;
+  margin: 0.5rem 0;
+  border: 1px solid #f8bbd0;
+  border-radius: 10px;
+  font-size: 1rem;
+}
+
+.calendar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-top: 1rem;
+}
+
+.calendar-day {
+  background-color: #ffdce5;
+  padding: 0.6rem;
+  border-radius: 12px;
+  cursor: pointer;
   text-align: center;
+  font-size: 0.9rem;
 }
 
-.tabs {
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
+.calendar-day:hover {
+  background-color: #ffc1d6;
 }
 
-.tabs button {
-  flex: 1;
-}
-
-ul {
-  list-style: none;
-  padding-left: 0;
-}
-
-li {
-  padding: 8px 0;
-  border-bottom: 1px solid #f0cbe0;
+.calendar-day-value {
+  font-weight: bold;
+  color: #880e4f;
+  margin-top: 4px;
 }
