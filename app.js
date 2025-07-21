@@ -73,6 +73,7 @@ window.showCadastro = (usuario) => {
   document.getElementById("conteudo").innerHTML = `
     <h2>Cadastro de Venda</h2>
     <input id="cliente" placeholder="Nome do cliente" />
+    <input id="telefone" placeholder="Telefone com DDD" />
     <input id="local" placeholder="Local da venda" />
     <input id="valor" placeholder="Valor (R$)" type="number" />
     <div><strong>Produtos vendidos:</strong>${produtoOptions}</div>
@@ -109,6 +110,7 @@ window.showCadastro = (usuario) => {
 
 window.cadastrar = async (usuario) => {
   const cliente = document.getElementById("cliente").value.trim();
+  const telefone = document.getElementById("telefone").value.replace(/\D/g, "");
   const local = document.getElementById("local").value.trim();
   const valor = parseFloat(document.getElementById("valor").value);
   const status = document.getElementById("status").value;
@@ -145,108 +147,12 @@ window.cadastrar = async (usuario) => {
     data,
     produtosVendidos: produtosSelecionados
   });
+
   alert("Venda salva!");
-};
 
-window.showDashboard = async () => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(doc => doc.data());
-  const hoje = new Date().toISOString().split("T")[0];
-  const hojeVendas = vendas.filter(v => v.data === hoje);
-  const totalHoje = hojeVendas.reduce((acc, v) => acc + v.valor, 0);
-  const aReceber = vendas.filter(v => v.status !== "pago")
-                         .reduce((acc, v) => acc + (v.faltaReceber || v.valor), 0);
-
-  let html = `<h2>Dashboard</h2>
-    <p>Vendas hoje: ${hojeVendas.length}</p>
-    <p>Total vendido: R$ ${totalHoje.toFixed(2)}</p>
-    <p>A receber: R$ ${aReceber.toFixed(2)}</p>`;
-
-  document.getElementById("conteudo").innerHTML = html;
-};
-
-window.showCobranca = async () => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  const pendentes = vendas.filter(v => v.status !== "pago" && v.dataReceber);
-
-  let html = `<h2>Cobrança</h2>
-    <input type="month" id="mesFiltro" />
-    <div id="calendario"></div>
-    <div id="detalhesDia"></div>`;
-
-  document.getElementById("conteudo").innerHTML = html;
-
-  document.getElementById("mesFiltro").addEventListener("change", e => {
-    const mes = e.target.value;
-    if (!mes) return;
-    const diasDoMes = {};
-    pendentes.forEach(v => {
-      if (v.dataReceber?.startsWith(mes)) {
-        const dia = v.dataReceber.split("-")[2];
-        if (!diasDoMes[dia]) diasDoMes[dia] = [];
-        diasDoMes[dia].push(v);
-      }
-    });
-
-    const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
-      const diaStr = String(i + 1).padStart(2, "0");
-      const vendasDoDia = diasDoMes[diaStr] || [];
-      const totalDia = vendasDoDia.reduce((acc, v) => acc + (v.faltaReceber || v.valor), 0);
-      const valorHtml = totalDia > 0 ? `<div class="calendar-day-value">R$ ${totalDia.toFixed(2)}</div>` : "";
-      return `
-        <div class="calendar-day" onclick="mostrarDia('${mes}-${diaStr}')">
-          <div>${diaStr}</div>
-          ${valorHtml}
-        </div>`;
-    }).join("");
-
-    document.getElementById("calendario").innerHTML = `<div class="calendar">${calendarioHtml}</div>`;
-  });
-
-  window.mostrarDia = (dataCompleta) => {
-    const vendasDoDia = pendentes.filter(v => v.dataReceber === dataCompleta);
-    if (!vendasDoDia.length) {
-      document.getElementById("detalhesDia").innerHTML = "<p>Sem cobranças neste dia.</p>";
-      return;
-    }
-
-    const cards = vendasDoDia.map(v => `
-      <div class="card">
-        <p><strong>${v.cliente}</strong> - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>
-        <button onclick="marcarPago('${v.id}')">Cobrei - já pago</button>
-        <button onclick="naoPago('${v.id}')">Cobrei - não pago</button>
-        <button onclick="reagendar('${v.id}')">Reagendar cobrança</button>
-        <div id="reagendar-${v.id}"></div>
-      </div>`).join("");
-
-    document.getElementById("detalhesDia").innerHTML = `<h3>${dataCompleta}</h3>${cards}`;
-  };
-};
-
-window.marcarPago = async (id) => {
-  const ref = doc(db, "vendas", id);
-  await updateDoc(ref, { status: "pago", dataReceber: null, faltaReceber: 0 });
-  alert("Status atualizado para pago");
-  showCobranca();
-};
-
-window.naoPago = async (id) => {
-  alert("A venda continua marcada como não paga.");
-};
-
-window.reagendar = (id) => {
-  document.getElementById(`reagendar-${id}`).innerHTML = `
-    <input type="date" id="novaData-${id}" />
-    <button onclick="salvarReagendamento('${id}')">Salvar nova data</button>
-  `;
-};
-
-window.salvarReagendamento = async (id) => {
-  const novaData = document.getElementById(`novaData-${id}`).value;
-  if (!novaData) return alert("Selecione a nova data");
-  const ref = doc(db, "vendas", id);
-  await updateDoc(ref, { dataReceber: novaData });
-  alert("Data reagendada com sucesso");
-  showCobranca();
+  if (telefone.length >= 10) {
+    const msg = `Olá ${cliente}, sua compra foi registrada!\nProdutos: ${produtosSelecionados.join(", ")}\nValor: R$ ${valor.toFixed(2)}\nForma: ${forma}\nStatus: ${status}`;
+    const link = `https://wa.me/55${telefone}?text=${encodeURIComponent(msg)}`;
+    window.open(link, "_blank");
+  }
 };
