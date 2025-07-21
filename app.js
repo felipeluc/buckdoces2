@@ -1,53 +1,89 @@
-// app.js completo com funcionalidade WhatsApp e cadastro
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore,
   collection,
-  getDocs,
   addDoc,
-  query,
-  where,
-  Timestamp,
-  doc,
+  getDocs,
   updateDoc,
-  deleteDoc,
-} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
+  doc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "SUA_API_KEY",
-  authDomain: "SEU_DOMINIO",
-  projectId: "SEU_PROJECT_ID",
-  storageBucket: "SEU_BUCKET",
-  messagingSenderId: "SEU_SENDER_ID",
-  appId: "SEU_APP_ID",
+  apiKey: "AIzaSyDGg5JtE_7gVRhTlRY30bpXsmMpvPEQ3tw",
+  authDomain: "buckdoces.firebaseapp.com",
+  projectId: "buckdoces",
+  storageBucket: "buckdoces.appspot.com",
+  messagingSenderId: "781727917443",
+  appId: "1:781727917443:web:c9709b3813d28ea60982b6"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const produtosLista = ["Trufa", "Cone", "Brigadeiro", "Bolo", "Torta"];
+document.getElementById("root").innerHTML = `
+  <h1>Buck Doces</h1>
+  <div class="card">
+    <select id="user">
+      <option>Ana Buck</option>
+      <option>João Buck</option>
+    </select>
+    <input type="password" id="senha" placeholder="Senha" />
+    <button onclick="login()">Entrar</button>
+  </div>
+  <div id="main"></div>
+`;
+
+const senhas = {
+  "Ana Buck": "Ana1234",
+  "João Buck": "João1234"
+};
+
+window.login = () => {
+  const usuario = document.getElementById("user").value;
+  const senha = document.getElementById("senha").value;
+  if (senhas[usuario] === senha) {
+    showTabs(usuario);
+  } else {
+    alert("Senha incorreta");
+  }
+};
+
+function showTabs(user) {
+  document.getElementById("main").innerHTML = `
+    <div class="card">
+      <button onclick="showCadastro('${user}')">Cadastrar Venda</button>
+      <button onclick="showDashboard()">Dashboard</button>
+      <button onclick="showCobranca()">Cobrança</button>
+    </div>
+    <div id="conteudo" class="card"></div>
+  `;
+}
+
+const produtosLista = [
+  "Cone", "Trufa", "Bolo de pote", "Pão de mel",
+  "Escondidinho de uva", "Bombom de uva", "BomBom de morango",
+  "Coxinha de morango", "Camafeu", "Caixinha", "Mousse", "Lanche natural"
+];
 
 window.showCadastro = (usuario) => {
   const produtoOptions = produtosLista
-    .map(p => `<label><input type="checkbox" value="${p}" /> ${p}</label>`) 
+    .map(p => `<label><input type="checkbox" value="${p}" /> ${p}</label>`)
     .join("");
 
-  document.getElementById("root").innerHTML = `
-    <div class="card">
-      <h2>Cadastro de Venda</h2>
-      <input id="cliente" placeholder="Nome do cliente" />
-      <input id="telefone" placeholder="Telefone (ex: 5511999999999)" />
-      <input id="local" placeholder="Local da venda" />
-      <input id="valor" placeholder="Valor (R$)" type="number" />
-      <div><strong>Produtos vendidos:</strong>${produtoOptions}</div>
-      <select id="status">
-        <option value="pago">Pago</option>
-        <option value="nao">Não pago</option>
-        <option value="parcial">Parcial</option>
-      </select>
-      <div id="extras"></div>
-      <button onclick="cadastrar('${usuario}')">Salvar</button>
-    </div>
+  document.getElementById("conteudo").innerHTML = `
+    <h2>Cadastro de Venda</h2>
+    <input id="cliente" placeholder="Nome do cliente" />
+    <input id="telefone" placeholder="Telefone (ex: 5599999999999)" />
+    <input id="local" placeholder="Local da venda" />
+    <input id="valor" placeholder="Valor (R$)" type="number" />
+    <div><strong>Produtos vendidos:</strong>${produtoOptions}</div>
+    <select id="status">
+      <option value="pago">Pago</option>
+      <option value="nao">Não pago</option>
+      <option value="parcial">Parcial</option>
+    </select>
+    <div id="extras"></div>
+    <button onclick="cadastrar('${usuario}')">Salvar</button>
   `;
 
   document.getElementById("status").addEventListener("change", (e) => {
@@ -85,11 +121,6 @@ window.cadastrar = async (usuario) => {
   const data = new Date().toISOString().split("T")[0];
   const produtosSelecionados = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
 
-  if (!cliente || !telefone || !local || isNaN(valor)) {
-    alert("Preencha todos os campos obrigatórios corretamente.");
-    return;
-  }
-
   const snap = await getDocs(collection(db, "vendas"));
   const duplicado = snap.docs.some(doc => {
     const d = doc.data();
@@ -117,17 +148,10 @@ window.cadastrar = async (usuario) => {
     produtosVendidos: produtosSelecionados
   });
 
-  // Envio via WhatsApp
-  const mensagem = `Olá ${cliente}, aqui é da Ana Buck Doces. Obrigado pela sua compra!
-Valor: R$ ${valor.toFixed(2)}
-Produtos: ${produtosSelecionados.join(", ")}
-Forma de pagamento: ${forma}
-Data: ${data}
+  const mensagem = `Olá ${cliente}, sua compra de R$ ${valor.toFixed(2)} foi registrada com sucesso. Obrigado pela preferência!`;
+  if (telefone.startsWith("55")) {
+    window.open(`https://wa.me/${telefone}?text=${encodeURIComponent(mensagem)}`);
+  }
 
-Qualquer dúvida estamos à disposição! 💖`;
-
-  const linkWhats = `https://wa.me/${telefone}?text=${encodeURIComponent(mensagem)}`;
-  window.open(linkWhats, "_blank");
-
-  alert("Venda salva e comprovante enviado!");
+  alert("Venda salva!");
 };
