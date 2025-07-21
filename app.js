@@ -1,5 +1,12 @@
-const root = document.getElementById("app");
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+// Parte 1: Firebase, Login original (usuário e senha), e navegação básica
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore,
   collection,
@@ -9,53 +16,72 @@ import {
   where,
   doc,
   updateDoc,
-  deleteDoc
-} from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+  deleteDoc,
+  onSnapshot,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "SUA_API_KEY",
   authDomain: "SEU_DOMINIO.firebaseapp.com",
-  projectId: "SEU_PROJECT_ID",
+  projectId: "SEU_PROJETO_ID",
   storageBucket: "SEU_BUCKET.appspot.com",
   messagingSenderId: "SEU_SENDER_ID",
-  appId: "SEU_APP_ID"
+  appId: "SUA_APP_ID"
 };
 
 const app = initializeApp(firebaseConfig);
+const auth = getAuth();
 const db = getFirestore(app);
 
-// Estado global do usuário
-let usuarioAtual = "";
+const appDiv = document.getElementById("app");
 
 function showLogin() {
-  root.innerHTML = `
+  appDiv.innerHTML = `
     <div class="card">
       <h2>Login</h2>
-      <input type="text" id="usuario" placeholder="Digite seu nome de usuário" />
-      <button onclick="fazerLogin()">Entrar</button>
+      <input type="text" id="loginUsuario" placeholder="Usuário" />
+      <input type="password" id="loginSenha" placeholder="Senha" />
+      <button onclick="login()">Entrar</button>
     </div>
   `;
 }
 
-window.fazerLogin = function () {
-  const usuario = document.getElementById("usuario").value.trim();
-  if (!usuario) {
-    alert("Digite seu nome de usuário.");
-    return;
+window.login = async function () {
+  const usuario = document.getElementById("loginUsuario").value;
+  const senha = document.getElementById("loginSenha").value;
+
+  // Apenas um login simples local, sem autenticação Firebase para manter como original
+  if (usuario === "admin" && senha === "1234") {
+    localStorage.setItem("logado", "true");
+    showMenu();
+  } else {
+    alert("Usuário ou senha incorretos.");
   }
-  usuarioAtual = usuario;
-  showMenu();
 };
 
 function showMenu() {
-  root.innerHTML = `
+  appDiv.innerHTML = `
     <div class="card">
-      <h2>Bem-vindo, ${usuarioAtual}</h2>
       <button onclick="showCadastro()">Cadastrar Venda</button>
       <button onclick="showDashboard()">Dashboard</button>
       <button onclick="showCobranca()">Cobrança</button>
       <button onclick="showAgenda()">Agenda</button>
-      <button onclick="showLogin()">Sair</button>
+      <button onclick="logout()">Sair</button>
     </div>
+    <div id="conteudo"></div>
   `;
 }
+
+window.logout = function () {
+  localStorage.removeItem("logado");
+  showLogin();
+};
+
+// Verifica login ao iniciar
+if (localStorage.getItem("logado") === "true") {
+  showMenu();
+} else {
+  showLogin();
+}
+
+// Aqui continuaremos com showCadastro() na Parte 2
