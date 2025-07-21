@@ -16,11 +16,11 @@ h1 {
   margin: 20px auto;
   padding: 20px;
   border-radius: 20px;
-  max-width: 500px;
+  max-width: 400px;
   box-shadow: 0 0 10px rgba(0,0,0,0.1);
 }
 
-input, select, button, textarea {
+input, select, button {
   display: block;
   width: 100%;
   padding: 10px;
@@ -33,22 +33,8 @@ button {
   background-color: #f4a1af;
   color: white;
   border: none;
-  cursor: pointer;
 }
 
 button:hover {
   background-color: #e28898;
-}
-
-.checkbox-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.checkbox-group label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 14px;
 }
