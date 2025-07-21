@@ -1,252 +1,338 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  getDocs,
-  updateDoc,
-  doc
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+const app = document.getElementById('root');
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDGg5JtE_7gVRhTlRY30bpXsmMpvPEQ3tw",
-  authDomain: "buckdoces.firebaseapp.com",
-  projectId: "buckdoces",
-  storageBucket: "buckdoces.appspot.com",
-  messagingSenderId: "781727917443",
-  appId: "1:781727917443:web:c9709b3813d28ea60982b6"
+  apiKey: "SUA_API_KEY",
+  authDomain: "SEU_AUTH_DOMAIN",
+  projectId: "SEU_PROJECT_ID",
+  storageBucket: "SEU_BUCKET",
+  messagingSenderId: "SEU_SENDER_ID",
+  appId: "SEU_APP_ID"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-document.getElementById("root").innerHTML = `
-  <h1>Buck Doces</h1>
-  <div class="card">
-    <select id="user">
-      <option>Ana Buck</option>
-      <option>João Buck</option>
-    </select>
-    <input type="password" id="senha" placeholder="Senha" />
-    <button onclick="login()">Entrar</button>
-  </div>
-  <div id="main"></div>
-`;
-
-const senhas = {
-  "Ana Buck": "Ana1234",
-  "João Buck": "João1234"
-};
-
-window.login = () => {
-  const usuario = document.getElementById("user").value;
-  const senha = document.getElementById("senha").value;
-  if (senhas[usuario] === senha) {
-    showTabs(usuario);
-  } else {
-    alert("Senha incorreta");
-  }
-};
-
-function showTabs(user) {
-  document.getElementById("main").innerHTML = `
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+function showLogin() {
+  app.innerHTML = `
     <div class="card">
-      <button onclick="showCadastro('${user}')">Cadastrar Venda</button>
-      <button onclick="showDashboard()">Dashboard</button>
-      <button onclick="showCobranca()">Cobrança</button>
+      <h2>Login</h2>
+      <input type="email" id="email" placeholder="Email" />
+      <input type="password" id="senha" placeholder="Senha" />
+      <button onclick="login()">Entrar</button>
+      <p>Não tem conta? <a href="#" onclick="showCadastroUsuario()">Cadastre-se</a></p>
     </div>
-    <div id="conteudo" class="card"></div>
   `;
 }
 
-const produtosLista = [
-  "Cone", "Trufa", "Bolo de pote", "Pão de mel",
-  "Escondidinho de uva", "Bombom de uva", "BomBom de morango",
-  "Coxinha de morango", "Camafeu", "Caixinha", "Mousse", "Lanche natural"
-];
+function login() {
+  const email = document.getElementById("email").value;
+  const senha = document.getElementById("senha").value;
 
-window.showCadastro = (usuario) => {
-  const produtoOptions = produtosLista
-    .map(p => `<label><input type="checkbox" value="${p}" /> ${p}</label>`)
-    .join("");
+  firebase.auth().signInWithEmailAndPassword(email, senha)
+    .then(() => showMenu())
+    .catch(() => alert("Erro ao fazer login."));
+}
 
-  document.getElementById("conteudo").innerHTML = `
-    <h2>Cadastro de Venda</h2>
-    <input id="cliente" placeholder="Nome do cliente" />
-    <input id="local" placeholder="Local da venda" />
-    <input id="valor" placeholder="Valor (R$)" type="number" />
-    <div><strong>Produtos vendidos:</strong>${produtoOptions}</div>
-    <select id="status">
-      <option value="pago">Pago</option>
-      <option value="nao">Não pago</option>
-      <option value="parcial">Parcial</option>
-    </select>
-    <div id="extras"></div>
-    <button onclick="cadastrar('${usuario}')">Salvar</button>
+function showCadastroUsuario() {
+  app.innerHTML = `
+    <div class="card">
+      <h2>Cadastrar Usuário</h2>
+      <input type="email" id="novoEmail" placeholder="Email" />
+      <input type="password" id="novaSenha" placeholder="Senha" />
+      <button onclick="cadastrarUsuario()">Cadastrar</button>
+      <p><a href="#" onclick="showLogin()">Voltar ao login</a></p>
+    </div>
   `;
+}
 
-  document.getElementById("status").addEventListener("change", (e) => {
-    const val = e.target.value;
-    let html = "";
-    if (val === "pago") {
-      html = `<select id="forma"><option>dinheiro</option><option>cartão</option><option>pix</option></select>`;
-    } else if (val === "nao") {
-      html = `
-        <input type="date" id="dataReceber" />
-        <select id="forma"><option>dinheiro</option><option>cartão</option><option>pix</option></select>
-      `;
-    } else if (val === "parcial") {
-      html = `
-        <input type="number" id="valorParcial" placeholder="Valor recebido hoje" />
-        <input type="number" id="falta" placeholder="Valor que falta" />
-        <input type="date" id="dataReceber" />
-        <select id="forma"><option>dinheiro</option><option>cartão</option><option>pix</option></select>
-      `;
-    }
-    document.getElementById("extras").innerHTML = html;
-  });
-};
+function cadastrarUsuario() {
+  const email = document.getElementById("novoEmail").value;
+  const senha = document.getElementById("novaSenha").value;
 
-window.cadastrar = async (usuario) => {
-  const cliente = document.getElementById("cliente").value.trim();
-  const local = document.getElementById("local").value.trim();
-  const valor = parseFloat(document.getElementById("valor").value);
-  const status = document.getElementById("status").value;
-  const forma = document.getElementById("forma")?.value || "";
-  const dataReceber = document.getElementById("dataReceber")?.value || "";
-  const valorParcial = parseFloat(document.getElementById("valorParcial")?.value || 0);
-  const faltaReceber = parseFloat(document.getElementById("falta")?.value || 0);
-  const data = new Date().toISOString().split("T")[0];
-  const produtosSelecionados = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+  firebase.auth().createUserWithEmailAndPassword(email, senha)
+    .then(() => alert("Usuário cadastrado com sucesso!"))
+    .catch(() => alert("Erro ao cadastrar."));
+}
 
-  const snap = await getDocs(collection(db, "vendas"));
-  const duplicado = snap.docs.some(doc => {
-    const d = doc.data();
-    return d.usuario === usuario &&
-           d.cliente === cliente &&
-           d.local === local &&
-           d.valor === valor &&
-           d.status === status &&
-           JSON.stringify(d.produtosVendidos || []) === JSON.stringify(produtosSelecionados) &&
-           d.dataReceber === (status !== "pago" ? dataReceber : null) &&
-           d.data === data;
-  });
+function showMenu() {
+  app.innerHTML = `
+    <div class="menu">
+      <button onclick="showCadastro()">Cadastrar Venda</button>
+      <button onclick="showDashboard()">Dashboard</button>
+      <button onclick="showCobranca()">Cobrança</button>
+      <button onclick="showAgenda()">Agenda</button>
+      <button onclick="logout()">Sair</button>
+    </div>
+  `;
+}
+function logout() {
+  firebase.auth().signOut().then(showLogin);
+}
 
-  if (duplicado) {
-    alert("Venda duplicada. Já existe com os mesmos dados.");
+firebase.auth().onAuthStateChanged((user) => {
+  user ? showMenu() : showLogin();
+});
+function showCadastro() {
+  app.innerHTML = `
+    <div class="card">
+      <h2>Cadastro de Venda</h2>
+      <input type="text" id="cliente" placeholder="Cliente" />
+      <input type="text" id="telefone" placeholder="Telefone (ex: 5599999999999)" />
+      <input type="text" id="produtos" placeholder="Produtos" />
+      <input type="text" id="local" placeholder="Local" />
+      <input type="number" id="valor" placeholder="Valor" />
+      <input type="date" id="data" />
+      <select id="pagamento">
+        <option value="Pix">Pix</option>
+        <option value="Dinheiro">Dinheiro</option>
+        <option value="Cartão">Cartão</option>
+      </select>
+      <textarea id="observacao" placeholder="Observações (opcional)"></textarea>
+      <button onclick="salvarVenda()">Salvar</button>
+    </div>
+  `;
+}
+
+function salvarVenda() {
+  const cliente = document.getElementById("cliente").value;
+  const telefone = document.getElementById("telefone").value;
+  const produtos = document.getElementById("produtos").value;
+  const local = document.getElementById("local").value;
+  const valor = parseFloat(document.getElementById("valor").value) || 0;
+  const data = document.getElementById("data").value;
+  const pagamento = document.getElementById("pagamento").value;
+  const observacao = document.getElementById("observacao").value;
+
+  if (!cliente || !telefone || !produtos || !valor || !data) {
+    alert("Preencha todos os campos obrigatórios.");
     return;
   }
 
-  await addDoc(collection(db, "vendas"), {
-    usuario, cliente, local, valor, status, forma,
-    valorParcial: status === "parcial" ? valorParcial : null,
-    faltaReceber: status === "parcial" ? faltaReceber : (status === "nao" ? valor : 0),
-    dataReceber: status !== "pago" ? dataReceber : null,
+  db.collection("vendas").add({
+    cliente,
+    telefone,
+    produtos,
+    local,
+    valor,
     data,
-    produtosVendidos: produtosSelecionados
+    pagamento,
+    observacao,
+    status: "Não pago"
+  }).then(() => {
+    const mensagem = `Olá ${cliente}, aqui está o comprovante da sua compra:\n\nProdutos: ${produtos}\nValor: R$ ${valor.toFixed(2)}\nPagamento: ${pagamento}\nData: ${data}\nLocal: ${local}`;
+    window.location.href = `https://wa.me/${telefone}?text=${encodeURIComponent(mensagem)}`;
   });
-  alert("Venda salva!");
-};
-
-window.showDashboard = async () => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(doc => doc.data());
-  const hoje = new Date().toISOString().split("T")[0];
-  const hojeVendas = vendas.filter(v => v.data === hoje);
-  const totalHoje = hojeVendas.reduce((acc, v) => acc + v.valor, 0);
-  const aReceber = vendas.filter(v => v.status !== "pago")
-                         .reduce((acc, v) => acc + (v.faltaReceber || v.valor), 0);
-
-  let html = `<h2>Dashboard</h2>
-    <p>Vendas hoje: ${hojeVendas.length}</p>
-    <p>Total vendido: R$ ${totalHoje.toFixed(2)}</p>
-    <p>A receber: R$ ${aReceber.toFixed(2)}</p>`;
-
-  document.getElementById("conteudo").innerHTML = html;
-};
-
-window.showCobranca = async () => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  const pendentes = vendas.filter(v => v.status !== "pago" && v.dataReceber);
-
-  let html = `<h2>Cobrança</h2>
-    <input type="month" id="mesFiltro" />
-    <div id="calendario"></div>
-    <div id="detalhesDia"></div>`;
-
-  document.getElementById("conteudo").innerHTML = html;
-
-  document.getElementById("mesFiltro").addEventListener("change", e => {
-    const mes = e.target.value;
-    if (!mes) return;
-    const diasDoMes = {};
-    pendentes.forEach(v => {
-      if (v.dataReceber?.startsWith(mes)) {
-        const dia = v.dataReceber.split("-")[2];
-        if (!diasDoMes[dia]) diasDoMes[dia] = [];
-        diasDoMes[dia].push(v);
-      }
+}
+function showDashboard() {
+  db.collection("vendas").get().then((querySnapshot) => {
+    let total = 0;
+    let receber = 0;
+    querySnapshot.forEach((doc) => {
+      const v = doc.data();
+      const valor = parseFloat(v.valor) || 0;
+      total += valor;
+      if (v.status !== "Pago") receber += valor;
     });
 
-    const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
-      const diaStr = String(i + 1).padStart(2, "0");
-      const vendasDoDia = diasDoMes[diaStr] || [];
-      const totalDia = vendasDoDia.reduce((acc, v) => acc + (v.faltaReceber || v.valor), 0);
-      const valorHtml = totalDia > 0 ? `<div class="calendar-day-value">R$ ${totalDia.toFixed(2)}</div>` : "";
-      return `
-        <div class="calendar-day" onclick="mostrarDia('${mes}-${diaStr}')">
-          <div>${diaStr}</div>
-          ${valorHtml}
-        </div>`;
-    }).join("");
-
-    document.getElementById("calendario").innerHTML = `<div class="calendar">${calendarioHtml}</div>`;
-  });
-
-  window.mostrarDia = (dataCompleta) => {
-    const vendasDoDia = pendentes.filter(v => v.dataReceber === dataCompleta);
-    if (!vendasDoDia.length) {
-      document.getElementById("detalhesDia").innerHTML = "<p>Sem cobranças neste dia.</p>";
-      return;
-    }
-
-    const cards = vendasDoDia.map(v => `
+    app.innerHTML = `
       <div class="card">
-        <p><strong>${v.cliente}</strong> - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>
-        <button onclick="marcarPago('${v.id}')">Cobrei - já pago</button>
-        <button onclick="naoPago('${v.id}')">Cobrei - não pago</button>
-        <button onclick="reagendar('${v.id}')">Reagendar cobrança</button>
-        <div id="reagendar-${v.id}"></div>
-      </div>`).join("");
+        <h2>Dashboard</h2>
+        <p>Total de Vendas: R$ ${total.toFixed(2)}</p>
+        <p>Valor a Receber: R$ ${receber.toFixed(2)}</p>
+      </div>
+    `;
+  });
+}
+function showCobranca() {
+  const hoje = new Date().toISOString().slice(0, 7);
+  let mesSelecionado = hoje;
 
-    document.getElementById("detalhesDia").innerHTML = `<h3>${dataCompleta}</h3>${cards}`;
+  function renderizarCobranca(mes) {
+    db.collection("vendas").where("data", ">=", `${mes}-01`).where("data", "<=", `${mes}-31`).get().then((querySnapshot) => {
+      const vendasPorDia = {};
+      let totalMensal = 0;
+
+      querySnapshot.forEach((doc) => {
+        const venda = doc.data();
+        const dia = venda.data;
+        if (!vendasPorDia[dia]) vendasPorDia[dia] = [];
+        vendasPorDia[dia].push({ id: doc.id, ...venda });
+
+        if (venda.status !== "Pago") {
+          totalMensal += parseFloat(venda.valor) || 0;
+        }
+      });
+
+      let calendario = '';
+      Object.keys(vendasPorDia).sort().forEach(dia => {
+        const totalDia = vendasPorDia[dia].reduce((soma, v) => v.status !== "Pago" ? soma + (parseFloat(v.valor) || 0) : soma, 0);
+        if (totalDia > 0) {
+          calendario += `
+            <div class="dia-cobranca" onclick="abrirDetalhesDia('${dia}')">
+              <strong>${dia}</strong> - R$ ${totalDia.toFixed(2)}
+            </div>
+          `;
+        }
+      });
+
+      app.innerHTML = `
+        <div class="card">
+          <h2>Cobrança</h2>
+          <label>Mês:
+            <input type="month" id="mesFiltro" value="${mes}" onchange="showCobranca()" />
+          </label>
+          <div id="calendario-cobranca">${calendario}</div>
+          <p><strong>Total do mês:</strong> R$ ${totalMensal.toFixed(2)}</p>
+          <button onclick="showMenu()">Voltar</button>
+        </div>
+      `;
+    });
+  }
+
+  window.abrirDetalhesDia = function (dia) {
+    db.collection("vendas").where("data", "==", dia).get().then((querySnapshot) => {
+      let detalhes = '';
+      querySnapshot.forEach((doc) => {
+        const v = doc.data();
+        const cor = v.status === "Pago" ? "green" : (new Date(v.data) < new Date() ? "red" : "black");
+        detalhes += `
+          <div class="venda-dia" style="border-left: 4px solid ${cor}; padding-left: 6px;">
+            <p><strong>${v.cliente}</strong> - R$ ${parseFloat(v.valor).toFixed(2)} (${v.pagamento})</p>
+            <p>${v.produtos} - ${v.local}</p>
+            <select onchange="atualizarStatus('${doc.id}', this.value)">
+              <option value="Pago" ${v.status === "Pago" ? "selected" : ""}>Cobrei - Já pago</option>
+              <option value="Não pago" ${v.status === "Não pago" ? "selected" : ""}>Cobrei - Não pago</option>
+              <option value="Reagendar">Reagendar</option>
+            </select>
+          </div>
+        `;
+      });
+
+      app.innerHTML = `
+        <div class="card">
+          <h2>Detalhes do dia ${dia}</h2>
+          ${detalhes}
+          <button onclick="showCobranca()">Voltar</button>
+        </div>
+      `;
+    });
   };
-};
 
-window.marcarPago = async (id) => {
-  const ref = doc(db, "vendas", id);
-  await updateDoc(ref, { status: "pago", dataReceber: null, faltaReceber: 0 });
-  alert("Status atualizado para pago");
-  showCobranca();
-};
+  window.atualizarStatus = function (id, status) {
+    if (status === "Reagendar") {
+      const novaData = prompt("Nova data (aaaa-mm-dd):");
+      if (novaData) {
+        db.collection("vendas").doc(id).update({ data: novaData });
+      }
+    } else {
+      db.collection("vendas").doc(id).update({ status });
+    }
+  };
 
-window.naoPago = async (id) => {
-  alert("A venda continua marcada como não paga.");
-};
+  const filtro = document.getElementById("mesFiltro");
+  if (filtro) {
+    mesSelecionado = filtro.value;
+  }
+  renderizarCobranca(mesSelecionado);
+}
+function showAgenda() {
+  db.collection("vendas").get().then((querySnapshot) => {
+    const clientes = {};
 
-window.reagendar = (id) => {
-  document.getElementById(`reagendar-${id}`).innerHTML = `
-    <input type="date" id="novaData-${id}" />
-    <button onclick="salvarReagendamento('${id}')">Salvar nova data</button>
-  `;
-};
+    querySnapshot.forEach((doc) => {
+      const venda = doc.data();
+      const telefone = venda.telefone || "sem-telefone";
+      if (!clientes[telefone]) {
+        clientes[telefone] = {
+          nome: venda.cliente,
+          telefone: telefone,
+          vendas: []
+        };
+      }
+      clientes[telefone].vendas.push({ id: doc.id, ...venda });
+    });
 
-window.salvarReagendamento = async (id) => {
-  const novaData = document.getElementById(`novaData-${id}`).value;
-  if (!novaData) return alert("Selecione a nova data");
-  const ref = doc(db, "vendas", id);
-  await updateDoc(ref, { dataReceber: novaData });
-  alert("Data reagendada com sucesso");
-  showCobranca();
-};
+    const listaClientes = Object.values(clientes).sort((a, b) =>
+      a.nome.localeCompare(b.nome)
+    );
+
+    let html = `
+      <div class="card">
+        <h2>Agenda de Clientes</h2>
+        <input type="text" placeholder="Buscar cliente..." id="buscaCliente" oninput="filtrarClientes()" />
+        <div id="lista-clientes">
+          ${listaClientes
+            .map(
+              (c) =>
+                `<div class="cliente-agenda" onclick="verComprasCliente('${c.telefone}')">
+                  <strong>${c.nome}</strong> (${c.telefone}) - ${c.vendas.length} compra(s)
+                </div>`
+            )
+            .join("")}
+        </div>
+        <button onclick="showMenu()">Voltar</button>
+      </div>
+    `;
+
+    app.innerHTML = html;
+
+    window.verComprasCliente = function (telefone) {
+      const cliente = clientes[telefone];
+      let total = 0;
+
+      const vendasHtml = cliente.vendas
+        .map((venda) => {
+          const valor = parseFloat(venda.valor) || 0;
+          total += valor;
+
+          return `
+            <div class="venda-cliente">
+              <p><strong>Data:</strong> ${venda.data} | <strong>Valor:</strong> R$ ${valor.toFixed(2)}</p>
+              <p><strong>Produtos:</strong> ${venda.produtos}</p>
+              <p><strong>Local:</strong> ${venda.local}</p>
+              <p><strong>Status:</strong> ${venda.status || "Não informado"}</p>
+              <select onchange="editarStatusVenda('${venda.id}', this.value)">
+                <option value="Pago" ${venda.status === "Pago" ? "selected" : ""}>Pago</option>
+                <option value="Parcial">Pago Parcial</option>
+                <option value="Não pago" ${venda.status === "Não pago" ? "selected" : ""}>Não Pago</option>
+              </select>
+            </div>
+          `;
+        })
+        .join("");
+
+      app.innerHTML = `
+        <div class="card">
+          <h2>Compras de ${cliente.nome}</h2>
+          ${vendasHtml}
+          <p><strong>Total:</strong> R$ ${total.toFixed(2)}</p>
+          <button onclick="showAgenda()">Voltar</button>
+        </div>
+      `;
+    };
+
+    window.editarStatusVenda = function (id, status) {
+      if (status === "Parcial") {
+        const restante = prompt("Qual o valor restante?");
+        if (restante) {
+          db.collection("vendas").doc(id).update({
+            status: "Parcial",
+            valor: restante // ou crie um novo campo tipo "restante"
+          });
+        }
+      } else {
+        db.collection("vendas").doc(id).update({ status });
+      }
+    };
+
+    window.filtrarClientes = function () {
+      const termo = document.getElementById("buscaCliente").value.toLowerCase();
+      const elementos = document.querySelectorAll(".cliente-agenda");
+
+      elementos.forEach((el) => {
+        el.style.display = el.textContent.toLowerCase().includes(termo)
+          ? "block"
+          : "none";
+      });
+    };
+  });
+}
