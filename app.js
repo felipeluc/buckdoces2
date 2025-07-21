@@ -432,3 +432,4 @@ function showCadastro() {
   document.getElementById('btnDashboard').onclick = showDashboard;
   document.getElementById('btnCobranca').onclick = showCobranca;
 }
+showLogin();
