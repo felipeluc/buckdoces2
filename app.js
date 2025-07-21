@@ -55,7 +55,8 @@ function cadastrarUsuario() {
 
 function showMenu() {
   app.innerHTML = `
-    <div class="menu">
+    <div class="card">
+      <h2>Menu</h2>
       <button onclick="showCadastro()">Cadastrar Venda</button>
       <button onclick="showDashboard()">Dashboard</button>
       <button onclick="showCobranca()">Cobrança</button>
@@ -64,6 +65,7 @@ function showMenu() {
     </div>
   `;
 }
+
 function logout() {
   firebase.auth().signOut().then(showLogin);
 }
