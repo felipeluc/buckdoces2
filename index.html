@@ -17,5 +17,24 @@
 
     <!-- Script principal -->
     <script type="module" src="app.js"></script>
+
+    <!-- Script para abrir o WhatsApp ao salvar a venda -->
+    <script>
+      window.enviarComprovanteWhatsApp = function (telefone, cliente, valor, produtos) {
+        const telLimpo = telefone.replace(/\D/g, "");
+        if (!telLimpo.startsWith("55") || telLimpo.length < 12) {
+          alert("Número de telefone inválido. Use o formato 55+DDD+número.");
+          return;
+        }
+
+        const texto = `Olá ${cliente}, aqui é da Ana Buck Doces! 🍬
+Recebemos seu pedido no valor de R$ ${valor.toFixed(2)}.
+Produtos: ${produtos.join(", ")}.
+Qualquer dúvida estamos à disposição!`;
+
+        const url = `https://wa.me/${telLimpo}?text=${encodeURIComponent(texto)}`;
+        window.open(url, "_blank");
+      };
+    </script>
   </body>
 </html>
