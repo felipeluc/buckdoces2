@@ -72,7 +72,8 @@ window.showCadastro = (usuario) => {
 
   document.getElementById("conteudo").innerHTML = `
     <h2>Cadastro de Venda</h2>
-    <input id="cliente" placeholder="Nome do cliente (ex: Maria - 51999999999)" />
+    <input id="cliente" placeholder="Nome do cliente" />
+    <input id="telefone" placeholder="Telefone (55 + DDD + número)" />
     <input id="local" placeholder="Local da venda" />
     <input id="valor" placeholder="Valor (R$)" type="number" />
     <div><strong>Produtos vendidos:</strong>${produtoOptions}</div>
@@ -108,156 +109,49 @@ window.showCadastro = (usuario) => {
 };
 
 window.cadastrar = async (usuario) => {
-  const cliente = document.getElementById("cliente").value.trim();
-  const local = document.getElementById("local").value.trim();
-  const valor = parseFloat(document.getElementById("valor").value);
+  const cliente = document.getElementById("cliente").value;
+  const telefone = document.getElementById("telefone").value.replace(/\D/g, "");
+  const local = document.getElementById("local").value;
+  const valor = Number(document.getElementById("valor").value);
   const status = document.getElementById("status").value;
-  const forma = document.getElementById("forma")?.value || "";
-  const dataReceber = document.getElementById("dataReceber")?.value || "";
-  const valorParcial = parseFloat(document.getElementById("valorParcial")?.value || 0);
-  const faltaReceber = parseFloat(document.getElementById("falta")?.value || 0);
-  const data = new Date().toISOString().split("T")[0];
-  const produtosSelecionados = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+  const produtos = Array.from(document.querySelectorAll("input[type=checkbox]:checked")).map(p => p.value);
+  const forma = document.getElementById("forma")?.value;
+  const dataReceber = document.getElementById("dataReceber")?.value;
+  const valorParcial = Number(document.getElementById("valorParcial")?.value || 0);
+  const falta = Number(document.getElementById("falta")?.value || 0);
 
-  const snap = await getDocs(collection(db, "vendas"));
-  const duplicado = snap.docs.some(doc => {
-    const d = doc.data();
-    return d.usuario === usuario &&
-           d.cliente === cliente &&
-           d.local === local &&
-           d.valor === valor &&
-           d.status === status &&
-           JSON.stringify(d.produtosVendidos || []) === JSON.stringify(produtosSelecionados) &&
-           d.dataReceber === (status !== "pago" ? dataReceber : null) &&
-           d.data === data;
-  });
-
-  if (duplicado) {
-    alert("Venda duplicada. Já existe com os mesmos dados.");
-    return;
-  }
-
-  await addDoc(collection(db, "vendas"), {
-    usuario, cliente, local, valor, status, forma,
-    valorParcial: status === "parcial" ? valorParcial : null,
-    faltaReceber: status === "parcial" ? faltaReceber : (status === "nao" ? valor : 0),
-    dataReceber: status !== "pago" ? dataReceber : null,
-    data,
-    produtosVendidos: produtosSelecionados
-  });
-
-  alert("Venda salva!");
-
-  // Enviar WhatsApp automático se o número estiver no nome do cliente
-  const numeroMatch = cliente.match(/\d{10,13}/);
-  if (numeroMatch) {
-    const numero = numeroMatch[0].replace(/\D/g, "");
-    const nomeSemNumero = cliente.replace(numero, "").replace("-", "").trim();
-    const texto = `Olá ${nomeSemNumero}, sua compra no valor de R$ ${valor.toFixed(2)} foi registrada com sucesso na Ana Buck Doces. Obrigado! 🍬`;
-    const url = `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`;
-    window.open(url, "_blank");
-  }
-};
-
-window.showDashboard = async () => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(doc => doc.data());
-  const hoje = new Date().toISOString().split("T")[0];
-  const hojeVendas = vendas.filter(v => v.data === hoje);
-  const totalHoje = hojeVendas.reduce((acc, v) => acc + v.valor, 0);
-  const aReceber = vendas.filter(v => v.status !== "pago")
-                         .reduce((acc, v) => acc + (v.faltaReceber || v.valor), 0);
-
-  let html = `<h2>Dashboard</h2>
-    <p>Vendas hoje: ${hojeVendas.length}</p>
-    <p>Total vendido: R$ ${totalHoje.toFixed(2)}</p>
-    <p>A receber: R$ ${aReceber.toFixed(2)}</p>`;
-
-  document.getElementById("conteudo").innerHTML = html;
-};
-
-window.showCobranca = async () => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  const pendentes = vendas.filter(v => v.status !== "pago" && v.dataReceber);
-
-  let html = `<h2>Cobrança</h2>
-    <input type="month" id="mesFiltro" />
-    <div id="calendario"></div>
-    <div id="detalhesDia"></div>`;
-
-  document.getElementById("conteudo").innerHTML = html;
-
-  document.getElementById("mesFiltro").addEventListener("change", e => {
-    const mes = e.target.value;
-    if (!mes) return;
-    const diasDoMes = {};
-    pendentes.forEach(v => {
-      if (v.dataReceber?.startsWith(mes)) {
-        const dia = v.dataReceber.split("-")[2];
-        if (!diasDoMes[dia]) diasDoMes[dia] = [];
-        diasDoMes[dia].push(v);
-      }
-    });
-
-    const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
-      const diaStr = String(i + 1).padStart(2, "0");
-      const vendasDoDia = diasDoMes[diaStr] || [];
-      const totalDia = vendasDoDia.reduce((acc, v) => acc + (v.faltaReceber || v.valor), 0);
-      const valorHtml = totalDia > 0 ? `<div class="calendar-day-value">R$ ${totalDia.toFixed(2)}</div>` : "";
-      return `
-        <div class="calendar-day" onclick="mostrarDia('${mes}-${diaStr}')">
-          <div>${diaStr}</div>
-          ${valorHtml}
-        </div>`;
-    }).join("");
-
-    document.getElementById("calendario").innerHTML = `<div class="calendar">${calendarioHtml}</div>`;
-  });
-
-  window.mostrarDia = (dataCompleta) => {
-    const vendasDoDia = pendentes.filter(v => v.dataReceber === dataCompleta);
-    if (!vendasDoDia.length) {
-      document.getElementById("detalhesDia").innerHTML = "<p>Sem cobranças neste dia.</p>";
-      return;
-    }
-
-    const cards = vendasDoDia.map(v => `
-      <div class="card">
-        <p><strong>${v.cliente}</strong> - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>
-        <button onclick="marcarPago('${v.id}')">Cobrei - já pago</button>
-        <button onclick="naoPago('${v.id}')">Cobrei - não pago</button>
-        <button onclick="reagendar('${v.id}')">Reagendar cobrança</button>
-        <div id="reagendar-${v.id}"></div>
-      </div>`).join("");
-
-    document.getElementById("detalhesDia").innerHTML = `<h3>${dataCompleta}</h3>${cards}`;
+  const venda = {
+    cliente,
+    telefone,
+    local,
+    produtos,
+    valor,
+    status,
+    forma: forma || null,
+    dataReceber: dataReceber || null,
+    faltaReceber: status === "parcial" ? falta : status === "nao" ? valor : 0,
+    recebidoHoje: status === "parcial" ? valorParcial : status === "pago" ? valor : 0,
+    user: usuario,
+    criadaEm: new Date().toISOString()
   };
-};
 
-window.marcarPago = async (id) => {
-  const ref = doc(db, "vendas", id);
-  await updateDoc(ref, { status: "pago", dataReceber: null, faltaReceber: 0 });
-  alert("Status atualizado para pago");
-  showCobranca();
-};
+  await addDoc(collection(db, "vendas"), venda);
 
-window.naoPago = async (id) => {
-  alert("A venda continua marcada como não paga.");
-};
+  alert("Venda cadastrada com sucesso!");
 
-window.reagendar = (id) => {
-  document.getElementById(`reagendar-${id}`).innerHTML = `
-    <input type="date" id="novaData-${id}" />
-    <button onclick="salvarReagendamento('${id}')">Salvar nova data</button>
-  `;
-};
+  if (telefone && telefone.length >= 11) {
+    const texto = `Olá ${cliente}, aqui é da Ana Buck Doces! 🍬
 
-window.salvarReagendamento = async (id) => {
-  const novaData = document.getElementById(`novaData-${id}`).value;
-  if (!novaData) return alert("Selecione a nova data");
-  const ref = doc(db, "vendas", id);
-  await updateDoc(ref, { dataReceber: novaData });
-  alert("Data reagendada com sucesso");
-  showCobranca();
+Venda registrada com sucesso!
+
+📍 Local: ${local}
+💰 Valor: R$ ${valor.toFixed(2)}
+🛍️ Produtos: ${produtos.join(", ")}
+📦 Status: ${status.toUpperCase()}
+
+Obrigada pela preferência! 💖`;
+
+    const link = `https://wa.me/${telefone}?text=${encodeURIComponent(texto)}`;
+    window.open(link, "_blank");
+  }
 };
