@@ -1,125 +1,109 @@
 body {
-  background-color: #fff4f7;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: #5a3e36;
+  font-family: Arial, sans-serif;
   margin: 0;
   padding: 0;
+  background: #fffaf8;
+  color: #333;
 }
 
-/* Logo centralizada no topo */
+h1, h2, h3 {
+  text-align: center;
+}
+
 #logo-container {
   text-align: center;
-  margin: 20px 0;
+  margin-top: 1rem;
 }
 
 #logo {
   width: 180px;
   height: auto;
-  border-radius: 50%;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
 }
 
-/* Títulos */
-h1, h2, h3 {
-  color: #b76e79;
-  text-align: center;
-}
-
-/* Cartões */
 .card {
-  background: white;
-  margin: 20px auto;
-  padding: 20px;
-  border-radius: 20px;
+  background: #fff;
+  margin: 1rem auto;
+  padding: 1rem;
   max-width: 400px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
 
-/* Inputs e Botões */
 input, select, button {
   display: block;
   width: 100%;
   padding: 10px;
   margin-top: 10px;
-  border-radius: 10px;
+  border-radius: 6px;
   border: 1px solid #ccc;
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 button {
-  background-color: #f4a1af;
+  background-color: #d6336c;
   color: white;
-  border: none;
   cursor: pointer;
-  transition: background 0.2s ease-in-out;
+  transition: background-color 0.3s ease;
 }
 
 button:hover {
-  background-color: #e28898;
+  background-color: #b02759;
 }
 
-/* Calendário */
 .calendar {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 8px;
-  margin-top: 20px;
-  text-align: center;
+  margin-top: 1rem;
 }
 
 .calendar-day {
-  background-color: #ffe9ef;
-  border-radius: 10px;
-  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 0.5rem;
+  text-align: center;
+  background: #fdf3f5;
   cursor: pointer;
-  position: relative;
-  min-height: 60px;
-  font-size: 14px;
 }
 
 .calendar-day:hover {
-  background-color: #fbd2dc;
+  background-color: #ffe6ec;
 }
 
 .calendar-day-value {
-  font-size: 0.75em;
-  color: #b76e79;
-}
-
-.amount {
-  position: absolute;
-  bottom: 5px;
-  left: 0;
-  right: 0;
   font-weight: bold;
-  color: #b76e79;
-  font-size: 12px;
+  color: #d6336c;
+  margin-top: 4px;
 }
 
-/* Detalhes do Dia */
-.day-details {
-  margin-top: 20px;
-  padding: 10px;
+#conteudo {
+  padding: 0 1rem;
 }
 
-.day-card {
-  background: white;
-  padding: 10px;
-  border-radius: 10px;
-  box-shadow: 0 0 5px rgba(0,0,0,0.1);
-  margin-bottom: 10px;
+label {
+  display: block;
+  margin: 5px 0;
 }
 
-.day-card button {
-  margin-top: 5px;
-  background-color: #f4a1af;
-  border: none;
+/* Destaque para cobranças vencidas */
+.card.vencida {
+  border: 2px solid red;
+  background-color: #ffe5e5;
+}
+
+/* Estilo para campo de telefone */
+input[type="tel"] {
+  border: 1px solid #aaa;
+}
+
+/* Botão WhatsApp personalizado (caso deseje separar no futuro) */
+.btn-whatsapp {
+  background-color: #25D366;
   color: white;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 14px;
+  font-weight: bold;
 }
 
-.day-card button:hover {
-  background-color: #e28898;
+.btn-whatsapp:hover {
+  background-color: #1ebe5a;
 }
