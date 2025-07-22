@@ -1,3 +1,4 @@
+// PARTE 1 - Inicialização Firebase e login --------------------------------------
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore,
@@ -65,17 +66,12 @@ const produtosLista = [
 ];
 
 window.showCadastro = (usuario) => {
-  const produtoOptions = produtosLista
-    .map((p, index) => `
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
-        <label>${p}</label>
-        <div style="display: flex; gap: 5px;">
-          <button onclick="alterarQtd(${index}, -1)">-</button>
-          <input type="number" id="qtd-${index}" value="0" min="0" style="width: 40px; text-align:center;" readonly />
-          <button onclick="alterarQtd(${index}, 1)">+</button>
-        </div>
-      </div>
-    `).join("");
+  const produtoInputs = produtosLista.map(p => `
+    <div class="produto-item">
+      <label>${p}</label>
+      <input type="number" id="qtd-${p}" value="0" min="0" style="width: 60px;" />
+    </div>
+  `).join("");
 
   document.getElementById("conteudo").innerHTML = `
     <h2>Cadastro de Venda</h2>
@@ -83,7 +79,7 @@ window.showCadastro = (usuario) => {
     <input id="telefone" placeholder="Telefone (ex: 5599999999999)" />
     <input id="local" placeholder="Local da venda" />
     <input id="valor" placeholder="Valor (R$)" type="number" />
-    <div><strong>Produtos vendidos:</strong><br>${produtoOptions}</div>
+    <div><strong>Produtos vendidos:</strong><div class="produtos-container">${produtoInputs}</div></div>
     <select id="status">
       <option value="pago">Pago</option>
       <option value="nao">Não pago</option>
@@ -115,51 +111,7 @@ window.showCadastro = (usuario) => {
     document.getElementById("extras").innerHTML = html;
   });
 };
-
-// Função para alterar a quantidade de um produto
-window.alterarQtd = (index, delta) => {
-  const input = document.getElementById(`qtd-${index}`);
-  let atual = parseInt(input.value);
-  atual = isNaN(atual) ? 0 : atual + delta;
-  input.value = atual < 0 ? 0 : atual;
-};
-
-// Enviar comprovante via WhatsApp
-window.enviarComprovante = () => {
-  const numero = document.getElementById("telefone")?.value.trim();
-  const valor = document.getElementById("valor")?.value.trim();
-  const cliente = document.getElementById("cliente")?.value.trim();
-  const status = document.getElementById("status")?.value;
-  const dataReceber = document.getElementById("dataReceber")?.value || "";
-  const valorParcial = document.getElementById("valorParcial")?.value || "";
-  const falta = document.getElementById("falta")?.value || "";
-
-  const produtos = produtosLista.map((p, i) => {
-    const qtd = parseInt(document.getElementById(`qtd-${i}`).value);
-    return qtd > 0 ? `${p} x${qtd}` : null;
-  }).filter(Boolean).join("\n");
-
-  if (!numero || !valor || !cliente) {
-    alert("Preencha nome, telefone e valor.");
-    return;
-  }
-
-  let msg = `Olá ${cliente}! Segue o comprovante da sua compra na Ana Buck Doces:\n\n` +
-            `Produtos:\n${produtos}\n\nValor: R$ ${valor}\nForma: ${status.toUpperCase()}\n`;
-
-  if (status === "parcial") {
-    msg += `Valor pago: R$ ${valorParcial}\nFalta: R$ ${falta}\n`;
-  }
-
-  if (status !== "pago" && dataReceber) {
-    msg += `Data para pagamento: ${dataReceber}\n`;
-  }
-
-  msg += `\nAgradecemos pela preferência! 😊`;
-
-  const link = `https://wa.me/${numero}?text=${encodeURIComponent(msg)}`;
-  window.open(link, "_blank");
-};
+// Parte 3 — Função para cadastrar a venda
 window.cadastrar = async (usuario) => {
   const cliente = document.getElementById("cliente").value.trim();
   const telefone = document.getElementById("telefone").value.trim();
@@ -172,29 +124,21 @@ window.cadastrar = async (usuario) => {
   const faltaReceber = parseFloat(document.getElementById("falta")?.value || 0);
   const data = new Date().toISOString().split("T")[0];
 
-  // Captura produtos com quantidade
-  const produtosVendidos = produtosLista
-    .map((p, i) => {
-      const qtd = parseInt(document.getElementById(`qtd-${i}`).value || 0);
-      return qtd > 0 ? { nome: p, quantidade: qtd } : null;
-    })
-    .filter(Boolean);
+  const produtosSelecionados = produtosLista.map(produto => {
+    const qtd = parseInt(document.getElementById(`prod-${produto}`)?.value || 0);
+    return qtd > 0 ? { nome: produto, quantidade: qtd } : null;
+  }).filter(Boolean);
 
-  if (!cliente || !telefone || !valor || produtosVendidos.length === 0) {
-    alert("Preencha todos os campos obrigatórios e selecione pelo menos um produto.");
-    return;
-  }
-
-  // Verifica duplicidade
   const snap = await getDocs(collection(db, "vendas"));
   const duplicado = snap.docs.some(doc => {
     const d = doc.data();
     return d.usuario === usuario &&
            d.cliente === cliente &&
+           d.telefone === telefone &&
            d.local === local &&
            d.valor === valor &&
            d.status === status &&
-           JSON.stringify(d.produtosVendidos || []) === JSON.stringify(produtosVendidos) &&
+           JSON.stringify(d.produtosVendidos || []) === JSON.stringify(produtosSelecionados) &&
            d.dataReceber === (status !== "pago" ? dataReceber : null) &&
            d.data === data;
   });
@@ -205,21 +149,50 @@ window.cadastrar = async (usuario) => {
   }
 
   await addDoc(collection(db, "vendas"), {
-    usuario,
-    cliente,
-    telefone,
-    local,
-    valor,
-    status,
-    forma,
+    usuario, cliente, telefone, local, valor, status, forma,
     valorParcial: status === "parcial" ? valorParcial : null,
     faltaReceber: status === "parcial" ? faltaReceber : (status === "nao" ? valor : 0),
     dataReceber: status !== "pago" ? dataReceber : null,
     data,
-    produtosVendidos
+    produtosVendidos: produtosSelecionados
   });
 
   alert("Venda salva!");
+};
+
+// Parte 4 — Enviar comprovante via WhatsApp com produtos e status
+window.enviarComprovante = () => {
+  const numero = document.getElementById("telefone")?.value.trim();
+  const valor = document.getElementById("valor")?.value.trim();
+  const cliente = document.getElementById("cliente")?.value.trim();
+  const status = document.getElementById("status")?.value;
+  const dataReceber = document.getElementById("dataReceber")?.value;
+
+  const produtosSelecionados = produtosLista.map(produto => {
+    const qtd = parseInt(document.getElementById(`prod-${produto}`)?.value || 0);
+    return qtd > 0 ? `${qtd}x ${produto}` : null;
+  }).filter(Boolean);
+
+  if (!numero || !valor || !cliente || produtosSelecionados.length === 0) {
+    alert("Preencha o nome, telefone, valor e selecione produtos antes de enviar o comprovante.");
+    return;
+  }
+
+  let statusTexto = "";
+  if (status === "pago") {
+    statusTexto = "✅ Pago";
+  } else if (status === "nao") {
+    statusTexto = `💰 Pagamento em aberto para ${dataReceber}`;
+  } else if (status === "parcial") {
+    statusTexto = `🟡 Pagamento parcial (restante até ${dataReceber})`;
+  }
+
+  const mensagem = `Olá ${cliente}! 🍬\n\nSegue o comprovante da sua compra na Ana Buck Doces:\n\n` +
+                   `Produtos: \n${produtosSelecionados.join("\n")}\n\n` +
+                   `Valor total: R$ ${valor}\nStatus: ${statusTexto}\n\nAgradecemos pela preferência! 😊`;
+
+  const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
+  window.open(link, "_blank");
 };
 window.showDashboard = async () => {
   const snap = await getDocs(collection(db, "vendas"));
@@ -241,7 +214,7 @@ window.showDashboard = async () => {
 window.showCobranca = async () => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  const pendentes = vendas.filter(v => v.status !== "pago" && v.dataReceber);
+  const pendentes = vendas.filter(v => v.dataReceber);
 
   let html = `<h2>Cobrança</h2>
     <input type="month" id="mesFiltro" />
@@ -253,6 +226,7 @@ window.showCobranca = async () => {
   document.getElementById("mesFiltro").addEventListener("change", e => {
     const mes = e.target.value;
     if (!mes) return;
+
     const diasDoMes = {};
     pendentes.forEach(v => {
       if (v.dataReceber?.startsWith(mes)) {
@@ -265,7 +239,8 @@ window.showCobranca = async () => {
     const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
       const diaStr = String(i + 1).padStart(2, "0");
       const vendasDoDia = diasDoMes[diaStr] || [];
-      const totalDia = vendasDoDia.reduce((acc, v) => acc + (v.faltaReceber || v.valor), 0);
+      const totalDia = vendasDoDia.filter(v => v.status !== "pago")
+                                   .reduce((acc, v) => acc + (v.faltaReceber || v.valor), 0);
       const valorHtml = totalDia > 0 ? `<div class="calendar-day-value">R$ ${totalDia.toFixed(2)}</div>` : "";
       return `
         <div class="calendar-day" onclick="mostrarDia('${mes}-${diaStr}')">
@@ -284,56 +259,154 @@ window.showCobranca = async () => {
       return;
     }
 
-    const cards = vendasDoDia.map(v => {
-      const produtosHtml = (v.produtosVendidos || [])
-        .map(p => `• ${p.nome} (${p.quantidade})`)
-        .join("<br>");
+    const agrupado = {};
+    vendasDoDia.forEach(v => {
+      if (!agrupado[v.telefone]) agrupado[v.telefone] = [];
+      agrupado[v.telefone].push(v);
+    });
 
-      return `
+    let html = `<h3>${dataCompleta}</h3>`;
+
+    for (const tel in agrupado) {
+      const grupo = agrupado[tel];
+      const clienteNome = grupo[0].cliente;
+      const totalGrupo = grupo.filter(v => v.status !== "pago")
+                              .reduce((acc, v) => acc + (v.faltaReceber || v.valor), 0);
+      const compras = grupo.map(v => `
+        <li>
+          ${v.produtosVendidos.map(p => `${p.quantidade || 1}x ${p.nome}`).join(", ")} —
+          ${v.local} — R$ ${v.faltaReceber || v.valor} —
+          Status: ${v.status} ${v.status !== "pago" ? `📅 ${v.dataReceber}` : "✅"}
+        </li>
+      `).join("");
+
+      html += `
         <div class="card">
-          <p><strong>${v.cliente}</strong> - ${v.local}</p>
-          <p>Valor: R$ ${v.faltaReceber || v.valor}</p>
-          <p>Forma: ${v.forma || "Não informado"}</p>
-          <p>Status: ${v.status === "parcial" ? "Parcial" : "Não pago"}</p>
-          <p>Para: ${v.dataReceber}</p>
-          <p>Produtos:<br>${produtosHtml}</p>
-          <button onclick="marcarPago('${v.id}')">Cobrei - já pago</button>
-          <button onclick="naoPago('${v.id}')">Cobrei - não pago</button>
-          <button onclick="reagendar('${v.id}')">Reagendar cobrança</button>
-          <div id="reagendar-${v.id}"></div>
+          <p><strong>${clienteNome}</strong> — Total: R$ ${totalGrupo.toFixed(2)}</p>
+          <ul>${compras}</ul>
+          <button onclick="cobrarWhats('${tel}', '${clienteNome}', ${totalGrupo.toFixed(2)})">Cobrar no WhatsApp</button>
+          <button onclick="cobrarNovamente('${tel}', '${clienteNome}', ${totalGrupo.toFixed(2)})">Cobrar de novo</button>
+          <button onclick="marcarPagoGrupo('${tel}', '${dataCompleta}')">Pago</button>
+          <button onclick="abrirReagendamento('${tel}')">Reagendar cobrança</button>
+          <div id="reagendar-${tel}"></div>
         </div>`;
-    }).join("");
+    }
 
-    document.getElementById("detalhesDia").innerHTML = `<h3>${dataCompleta}</h3>${cards}`;
+    document.getElementById("detalhesDia").innerHTML = html;
   };
 };
-window.marcarPago = async (id) => {
-  const ref = doc(db, "vendas", id);
-  await updateDoc(ref, { status: "pago", dataReceber: null, faltaReceber: 0 });
-  alert("Status atualizado para pago");
+window.cobrarWhats = (telefone, cliente, total) => {
+  const mensagem = `Olá ${cliente}, tudo bem? 😊\n\nEstou passando para lembrar que há um valor pendente conosco:\n\nValor: R$ ${total.toFixed(2)}\n\nQualquer dúvida estou à disposição.\n\n— Ana Buck Doces 🍬`;
+  const link = `https://wa.me/${telefone}?text=${encodeURIComponent(mensagem)}`;
+  window.open(link, "_blank");
+};
+
+window.cobrarNovamente = (telefone, cliente, total) => {
+  const mensagem = `Oi ${cliente}! 😊\n\nMesmo que o pagamento já tenha sido feito, caso tenha sido agendado ou esteja em andamento, por favor, desconsidere esta mensagem.\n\nValor mencionado: R$ ${total.toFixed(2)}\n\nObrigada! 🍬`;
+  const link = `https://wa.me/${telefone}?text=${encodeURIComponent(mensagem)}`;
+  window.open(link, "_blank");
+};
+
+window.marcarPagoGrupo = async (telefone, dataReceber) => {
+  const snap = await getDocs(collection(db, "vendas"));
+  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const grupo = vendas.filter(v => v.telefone === telefone && v.dataReceber === dataReceber);
+
+  for (const venda of grupo) {
+    const ref = doc(db, "vendas", venda.id);
+    await updateDoc(ref, {
+      status: "pago",
+      dataReceber: null,
+      faltaReceber: 0
+    });
+  }
+
+  alert("Status do grupo atualizado para pago!");
   showCobranca();
 };
 
-window.naoPago = async (id) => {
-  alert("A venda continua marcada como não paga.");
-};
+window.marcarPagoParcialGrupo = async (telefone, dataReceber) => {
+  const valorParcial = prompt("Digite o valor parcial recebido do grupo:");
+  const restante = prompt("Digite o valor que ainda falta:");
 
-window.reagendar = (id) => {
-  document.getElementById(`reagendar-${id}`).innerHTML = `
-    <input type="date" id="novaData-${id}" />
-    <button onclick="salvarReagendamento('${id}')">Salvar nova data</button>
-  `;
-};
-
-window.salvarReagendamento = async (id) => {
-  const novaData = document.getElementById(`novaData-${id}`).value;
-  if (!novaData) {
-    alert("Selecione a nova data");
+  if (!valorParcial || !restante) {
+    alert("Valores inválidos.");
     return;
   }
 
-  const ref = doc(db, "vendas", id);
-  await updateDoc(ref, { dataReceber: novaData });
-  alert("Data reagendada com sucesso");
+  const novaData = prompt("Nova data para cobrança do restante (AAAA-MM-DD):");
+  if (!novaData) {
+    alert("Data inválida.");
+    return;
+  }
+
+  const snap = await getDocs(collection(db, "vendas"));
+  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const grupo = vendas.filter(v => v.telefone === telefone && v.dataReceber === dataReceber);
+
+  for (const venda of grupo) {
+    const ref = doc(db, "vendas", venda.id);
+    await updateDoc(ref, {
+      status: "parcial",
+      valorParcial: parseFloat(valorParcial),
+      faltaReceber: parseFloat(restante),
+      dataReceber: novaData
+    });
+  }
+
+  alert("Grupo marcado como pagamento parcial.");
   showCobranca();
 };
+
+window.abrirReagendamento = (telefone) => {
+  document.getElementById(`reagendar-${telefone}`).innerHTML = `
+    <input type="date" id="novaData-${telefone}" />
+    <button onclick="salvarReagendamento('${telefone}')">Salvar nova data</button>
+  `;
+};
+
+window.salvarReagendamento = async (telefone) => {
+  const novaData = document.getElementById(`novaData-${telefone}`).value;
+  if (!novaData) return alert("Selecione a nova data");
+
+  const snap = await getDocs(collection(db, "vendas"));
+  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const grupo = vendas.filter(v => v.telefone === telefone);
+
+  for (const venda of grupo) {
+    const ref = doc(db, "vendas", venda.id);
+    await updateDoc(ref, { dataReceber: novaData });
+  }
+
+  alert("Data reagendada com sucesso para o grupo.");
+  showCobranca();
+};
+// Atualização visual dos cards após marcar como pago (sem sumir do card)
+window.atualizarStatusVisual = (telefone, dataReceber) => {
+  const statusEl = document.querySelector(`#status-${telefone}`);
+  if (statusEl) {
+    statusEl.innerHTML = `<span class="status pago">Pago</span>`;
+  }
+
+  // Atualizar o calendário para remover o valor do dia
+  showCobranca();
+};
+
+// Estilos dinâmicos de status (chamado por mostrarDia)
+function getStatusClass(status) {
+  switch (status) {
+    case "pago":
+      return "pago";
+    case "parcial":
+      return "parcial";
+    case "nao":
+      return "nao-pago";
+    default:
+      return "";
+  }
+}
+
+// Inicialização (caso queira aplicar lógica ao carregar tudo no futuro)
+document.addEventListener("DOMContentLoaded", () => {
+  // Futuras integrações podem entrar aqui
+});
