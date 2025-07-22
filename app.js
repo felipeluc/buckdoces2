@@ -1,4 +1,3 @@
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore,
@@ -251,7 +250,6 @@ window.salvarReagendamento = async (id) => {
   alert("Data reagendada com sucesso");
   showCobranca();
 };
-
 function enviarComprovante() {
   const numero = document.getElementById("numeroCliente").value.trim();
   const valor = document.getElementById("valorVenda").value.trim();
