@@ -1,4 +1,3 @@
-// ... (início permanece igual)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore,
@@ -9,7 +8,7 @@ import {
   doc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-// Config Firebase (igual)
+
 const firebaseConfig = {
   apiKey: "AIzaSyDGg5JtE_7gVRhTlRY30bpXsmMpvPEQ3tw",
   authDomain: "buckdoces.firebaseapp.com",
@@ -21,8 +20,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-
-// ... (login permanece igual)
 
 window.showCadastro = (usuario) => {
   const produtoOptions = produtosLista
@@ -114,7 +111,6 @@ window.cadastrar = async (usuario) => {
 
   alert("Venda salva!");
 
-  // Envia mensagem no WhatsApp
   enviarComprovanteWhatsApp(cliente, telefone, valor, produtosSelecionados);
 };
 
@@ -125,5 +121,3 @@ function enviarComprovanteWhatsApp(nome, numero, valor, produtos) {
   const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
   window.open(link, "_blank");
 }
-
-// As demais funções (dashboard, cobrança...) permanecem inalteradas.
