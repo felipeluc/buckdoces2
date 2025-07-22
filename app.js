@@ -73,7 +73,7 @@ window.showCadastro = (usuario) => {
   document.getElementById("conteudo").innerHTML = `
     <h2>Cadastro de Venda</h2>
     <input id="cliente" placeholder="Nome do cliente" />
-    <input id="telefone" placeholder="WhatsApp (55+DDD+número)" />
+    <input id="telefone" placeholder="Telefone (ex: 5599999999999)" />
     <input id="local" placeholder="Local da venda" />
     <input id="valor" placeholder="Valor (R$)" type="number" />
     <div><strong>Produtos vendidos:</strong>${produtoOptions}</div>
@@ -84,6 +84,7 @@ window.showCadastro = (usuario) => {
     </select>
     <div id="extras"></div>
     <button onclick="cadastrar('${usuario}')">Salvar</button>
+    <button onclick="enviarComprovante()">Enviar Comprovante via WhatsApp</button>
   `;
 
   document.getElementById("status").addEventListener("change", (e) => {
@@ -121,8 +122,21 @@ window.cadastrar = async (usuario) => {
   const data = new Date().toISOString().split("T")[0];
   const produtosSelecionados = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
 
-  if (!cliente || !telefone || !valor || produtosSelecionados.length === 0) {
-    alert("Preencha todos os campos obrigatórios");
+  const snap = await getDocs(collection(db, "vendas"));
+  const duplicado = snap.docs.some(doc => {
+    const d = doc.data();
+    return d.usuario === usuario &&
+           d.cliente === cliente &&
+           d.local === local &&
+           d.valor === valor &&
+           d.status === status &&
+           JSON.stringify(d.produtosVendidos || []) === JSON.stringify(produtosSelecionados) &&
+           d.dataReceber === (status !== "pago" ? dataReceber : null) &&
+           d.data === data;
+  });
+
+  if (duplicado) {
+    alert("Venda duplicada. Já existe com os mesmos dados.");
     return;
   }
 
@@ -134,13 +148,23 @@ window.cadastrar = async (usuario) => {
     data,
     produtosVendidos: produtosSelecionados
   });
+  alert("Venda salva!");
+};
 
-  // Lógica para envio automático para o WhatsApp
-  const mensagem = `Olá ${cliente}! Segue o comprovante da sua compra:\n\nProdutos: ${produtosSelecionados.join(", ")}\nValor: R$ ${valor.toFixed(2)}\n\nAgradecemos pela preferência! 😊`;
-  const link = `https://wa.me/${telefone}?text=${encodeURIComponent(mensagem)}`;
+window.enviarComprovante = () => {
+  const numero = document.getElementById("telefone")?.value.trim();
+  const valor = document.getElementById("valor")?.value.trim();
+  const cliente = document.getElementById("cliente")?.value.trim();
+
+  if (!numero || !valor || !cliente) {
+    alert("Preencha o nome, telefone e valor antes de enviar o comprovante.");
+    return;
+  }
+
+  const mensagem = `Olá ${cliente}! Segue o comprovante da sua compra na Ana Buck Doces:\n\nValor: R$ ${valor}\nAgradecemos pela preferência! 🍬`;
+  const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
+
   window.open(link, "_blank");
-
-  alert("Venda salva e comprovante enviado!");
 };
 
 window.showDashboard = async () => {
@@ -198,28 +222,25 @@ window.showCobranca = async () => {
 
     document.getElementById("calendario").innerHTML = `<div class="calendar">${calendarioHtml}</div>`;
   });
-};
 
-window.mostrarDia = async (dataCompleta) => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  const vendasDoDia = vendas.filter(v => v.dataReceber === dataCompleta && v.status !== "pago");
+  window.mostrarDia = (dataCompleta) => {
+    const vendasDoDia = pendentes.filter(v => v.dataReceber === dataCompleta);
+    if (!vendasDoDia.length) {
+      document.getElementById("detalhesDia").innerHTML = "<p>Sem cobranças neste dia.</p>";
+      return;
+    }
 
-  if (!vendasDoDia.length) {
-    document.getElementById("detalhesDia").innerHTML = "<p>Sem cobranças neste dia.</p>";
-    return;
-  }
+    const cards = vendasDoDia.map(v => `
+      <div class="card">
+        <p><strong>${v.cliente}</strong> - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>
+        <button onclick="marcarPago('${v.id}')">Cobrei - já pago</button>
+        <button onclick="naoPago('${v.id}')">Cobrei - não pago</button>
+        <button onclick="reagendar('${v.id}')">Reagendar cobrança</button>
+        <div id="reagendar-${v.id}"></div>
+      </div>`).join("");
 
-  const cards = vendasDoDia.map(v => `
-    <div class="card">
-      <p><strong>${v.cliente}</strong> - ${v.local} - R$ ${v.faltaReceber || v.valor}</p>
-      <button onclick="marcarPago('${v.id}')">Cobrei - já pago</button>
-      <button onclick="naoPago('${v.id}')">Cobrei - não pago</button>
-      <button onclick="reagendar('${v.id}')">Reagendar cobrança</button>
-      <div id="reagendar-${v.id}"></div>
-    </div>`).join("");
-
-  document.getElementById("detalhesDia").innerHTML = `<h3>${dataCompleta}</h3>${cards}`;
+    document.getElementById("detalhesDia").innerHTML = `<h3>${dataCompleta}</h3>${cards}`;
+  };
 };
 
 window.marcarPago = async (id) => {
