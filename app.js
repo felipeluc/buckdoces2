@@ -73,7 +73,6 @@ window.showCadastro = (usuario) => {
   document.getElementById("conteudo").innerHTML = `
     <h2>Cadastro de Venda</h2>
     <input id="cliente" placeholder="Nome do cliente" />
-    <input id="telefone" placeholder="WhatsApp do cliente (ex: 5599999999999)" />
     <input id="local" placeholder="Local da venda" />
     <input id="valor" placeholder="Valor (R$)" type="number" />
     <div><strong>Produtos vendidos:</strong>${produtoOptions}</div>
@@ -110,7 +109,6 @@ window.showCadastro = (usuario) => {
 
 window.cadastrar = async (usuario) => {
   const cliente = document.getElementById("cliente").value.trim();
-  const telefone = document.getElementById("telefone")?.value.trim();
   const local = document.getElementById("local").value.trim();
   const valor = parseFloat(document.getElementById("valor").value);
   const status = document.getElementById("status").value;
@@ -140,22 +138,14 @@ window.cadastrar = async (usuario) => {
   }
 
   await addDoc(collection(db, "vendas"), {
-    usuario, cliente, telefone, local, valor, status, forma,
+    usuario, cliente, local, valor, status, forma,
     valorParcial: status === "parcial" ? valorParcial : null,
     faltaReceber: status === "parcial" ? faltaReceber : (status === "nao" ? valor : 0),
     dataReceber: status !== "pago" ? dataReceber : null,
     data,
     produtosVendidos: produtosSelecionados
   });
-
   alert("Venda salva!");
-
-  // ENVIA COMPROVANTE NO WHATSAPP
-  if (telefone) {
-    const mensagem = `Olá ${cliente}, sua compra foi registrada com sucesso!\n\nProdutos: ${produtosSelecionados.join(", ")}\nValor: R$ ${valor.toFixed(2)}\nStatus: ${status}\nForma de pagamento: ${forma}\n\nAgradecemos pela preferência! 😊`;
-    const link = `https://wa.me/${telefone}?text=${encodeURIComponent(mensagem)}`;
-    window.open(link, "_blank");
-  }
 };
 
 window.showDashboard = async () => {
