@@ -1,124 +1,97 @@
 body {
-  background-color: #fff4f7;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: #5a3e36;
+  font-family: Arial, sans-serif;
+  background-color: #fff5f7;
+  color: #333;
   margin: 0;
   padding: 0;
 }
 
 #logo-container {
   text-align: center;
-  margin: 20px 0;
+  margin: 1rem 0;
 }
 
 #logo {
-  width: 180px;
-  height: auto;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
 }
 
-/* Títulos */
-h1, h2, h3 {
-  color: #d08490;
-  text-align: center;
-}
-
-/* Cartões */
 .card {
-  background: white;
-  margin: 20px auto;
-  padding: 20px;
-  border-radius: 20px;
-  max-width: 420px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  background: #ffe4ec;
+  margin: 1rem auto;
+  padding: 1rem;
+  border-radius: 1rem;
+  max-width: 600px;
+  box-shadow: 0 0 5px #d48ca3;
 }
 
-/* Inputs e Botões */
-input, select, button {
+input,
+select,
+button {
   display: block;
+  margin: 0.5rem 0;
+  padding: 0.5rem;
   width: 100%;
-  padding: 10px;
-  margin-top: 10px;
-  border-radius: 10px;
+  border-radius: 0.5rem;
   border: 1px solid #ccc;
-  font-size: 16px;
 }
 
 button {
-  background-color: #f4a1af;
-  color: white;
-  border: none;
+  background-color: #ffb6c1;
+  color: #fff;
+  font-weight: bold;
   cursor: pointer;
-  transition: background 0.2s ease-in-out;
+  border: none;
 }
 
 button:hover {
-  background-color: #e28898;
+  background-color: #ff91ac;
 }
 
-/* Calendário */
 .calendar {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
-  margin-top: 20px;
-  text-align: center;
+  gap: 0.5rem;
+  padding: 1rem;
 }
 
 .calendar-day {
-  background-color: #ffe9ef;
-  border-radius: 10px;
-  padding: 10px;
+  background: #ffe4ec;
+  padding: 0.5rem;
+  text-align: center;
+  border-radius: 0.5rem;
   cursor: pointer;
-  position: relative;
-  min-height: 60px;
-  font-size: 14px;
-}
-
-.calendar-day:hover {
-  background-color: #fbd2dc;
+  font-weight: bold;
+  box-shadow: 0 0 4px #d48ca3;
 }
 
 .calendar-day-value {
-  font-size: 0.75em;
-  color: #b76e79;
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: #444;
 }
 
-.amount {
-  position: absolute;
-  bottom: 5px;
-  left: 0;
-  right: 0;
+.status {
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.5rem;
   font-weight: bold;
-  color: #b76e79;
-  font-size: 12px;
+  display: inline-block;
+  margin-top: 0.5rem;
 }
 
-/* Detalhes do Dia */
-.day-details {
-  margin-top: 20px;
-  padding: 10px;
+.status.pago {
+  background-color: #d4f4dd;
+  color: #297f4f;
 }
 
-.day-card {
-  background: white;
-  padding: 10px;
-  border-radius: 10px;
-  box-shadow: 0 0 5px rgba(0,0,0,0.1);
-  margin-bottom: 10px;
+.status.parcial {
+  background-color: #fff6d4;
+  color: #a68d00;
 }
 
-.day-card button {
-  margin-top: 5px;
-  background-color: #f4a1af;
-  border: none;
-  color: white;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-.day-card button:hover {
-  background-color: #e28898;
+.status.nao-pago {
+  background-color: #fddddd;
+  color: #a33a3a;
 }
