@@ -1,125 +1,35 @@
 body {
-  background-color: #fff4f7;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: #5a3e36;
+  font-family: Arial, sans-serif;
+  background-color: #fff8f0;
   margin: 0;
   padding: 0;
+  text-align: center;
 }
 
-/* Logo centralizada no topo */
 #logo-container {
-  text-align: center;
-  margin: 20px 0;
+  margin-top: 20px;
 }
 
 #logo {
-  width: 180px;
-  height: auto;
-  border-radius: 50%;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-}
-
-/* Títulos */
-h1, h2, h3 {
-  color: #b76e79;
-  text-align: center;
-}
-
-/* Cartões */
-.card {
-  background: white;
-  margin: 20px auto;
-  padding: 20px;
-  border-radius: 20px;
-  max-width: 400px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.1);
-}
-
-/* Inputs e Botões */
-input, select, button {
-  display: block;
-  width: 100%;
-  padding: 10px;
-  margin-top: 10px;
+  width: 200px;
   border-radius: 10px;
+}
+
+input,
+select,
+button {
+  display: block;
+  margin: 10px auto;
+  padding: 10px;
+  width: 80%;
+  max-width: 400px;
+  border-radius: 5px;
   border: 1px solid #ccc;
-  font-size: 16px;
 }
 
 button {
-  background-color: #f4a1af;
+  background-color: #ff69b4;
   color: white;
-  border: none;
-  cursor: pointer;
-  transition: background 0.2s ease-in-out;
-}
-
-button:hover {
-  background-color: #e28898;
-}
-
-/* Calendário */
-.calendar {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
-  margin-top: 20px;
-  text-align: center;
-}
-
-.calendar-day {
-  background-color: #ffe9ef;
-  border-radius: 10px;
-  padding: 10px;
-  cursor: pointer;
-  position: relative;
-  min-height: 60px;
-  font-size: 14px;
-}
-
-.calendar-day:hover {
-  background-color: #fbd2dc;
-}
-
-.calendar-day-value {
-  font-size: 0.75em;
-  color: #b76e79;
-}
-
-.amount {
-  position: absolute;
-  bottom: 5px;
-  left: 0;
-  right: 0;
   font-weight: bold;
-  color: #b76e79;
-  font-size: 12px;
-}
-
-/* Detalhes do Dia */
-.day-details {
-  margin-top: 20px;
-  padding: 10px;
-}
-
-.day-card {
-  background: white;
-  padding: 10px;
-  border-radius: 10px;
-  box-shadow: 0 0 5px rgba(0,0,0,0.1);
-  margin-bottom: 10px;
-}
-
-.day-card button {
-  margin-top: 5px;
-  background-color: #f4a1af;
-  border: none;
-  color: white;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-.day-card button:hover {
-  background-color: #e28898;
+  cursor: pointer;
 }
