@@ -58,27 +58,28 @@ window.marcarPagoGrupo = async (telefone, dataCompleta) => {
     });
   }
 
-  // Atualiza localStorage com os dados novos
+  // Atualiza localStorage com os dados mais recentes do Firebase
   const snapAtualizado = await getDocs(collection(db, "vendas"));
   const vendasAtualizadas = snapAtualizado.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   localStorage.setItem("vendas", JSON.stringify(vendasAtualizadas));
 
   alert("Status atualizado para 'pago'.");
 
-  // Atualiza o visual do dia
+  // Atualiza o card do dia
   mostrarDia(dataCompleta);
 
-  // Recalcula os valores no calendário
+  // Atualiza o calendário do mês
   const inputMes = document.getElementById("mesFiltro");
   if (inputMes && inputMes.value) {
     inputMes.dispatchEvent(new Event("change"));
   }
+
+  // Atualiza o dashboard
+  showDashboard();
 };
 window.showCobranca = async () => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  const pendentes = vendas.filter(v => v.status !== "pago" && v.dataReceber);
-
   localStorage.setItem("vendas", JSON.stringify(vendas));
 
   let html = `
@@ -95,7 +96,9 @@ window.showCobranca = async () => {
     if (!mes) return;
 
     const diasDoMes = {};
-    const vendasFiltradas = JSON.parse(localStorage.getItem("vendas")).filter(v => v.status !== "pago" && v.dataReceber?.startsWith(mes));
+    const vendasFiltradas = JSON.parse(localStorage.getItem("vendas")).filter(v => {
+      return v.status !== "pago" && v.dataReceber?.startsWith(mes);
+    });
 
     vendasFiltradas.forEach(v => {
       const dia = v.dataReceber.split("-")[2];
@@ -199,6 +202,7 @@ Por favor realizar o pagamento conforme nosso combinado, qualquer dúvida estou 
   const link = `https://wa.me/${telefone}?text=${encodeURIComponent(msg)}`;
   window.open(link, "_blank");
 };
+
 window.reagendarGrupo = (telefone, dataCompleta) => {
   const div = document.getElementById(`reagendar-${telefone}`);
   div.innerHTML = `
@@ -223,7 +227,6 @@ window.confirmarReagendar = async (telefone, dataCompleta) => {
     });
   }
 
-  // Atualiza localStorage com dados atualizados
   const snapAtualizado = await getDocs(collection(db, "vendas"));
   const vendasAtualizadas = snapAtualizado.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   localStorage.setItem("vendas", JSON.stringify(vendasAtualizadas));
@@ -231,7 +234,6 @@ window.confirmarReagendar = async (telefone, dataCompleta) => {
   alert("Data reagendada com sucesso!");
   mostrarDia(dataCompleta);
 
-  // Atualiza calendário
   const inputMes = document.getElementById("mesFiltro");
   if (inputMes && inputMes.value) {
     inputMes.dispatchEvent(new Event("change"));
