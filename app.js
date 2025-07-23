@@ -21,8 +21,8 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 document.getElementById("root").innerHTML = `
-  <h1>Buck Doces</h1>
-  <div class="card">
+  <h1 style="text-align: center; color: #d48c94">Buck Doces</h1>
+  <div class="card login-card">
     <select id="user">
       <option>Ana Buck</option>
       <option>João Buck</option>
