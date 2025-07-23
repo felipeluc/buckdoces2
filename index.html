@@ -1,13 +1,28 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Buck Doces</title>
-  <link rel="stylesheet" href="style.css" />
+  <!-- Adicione o link do seu arquivo de estilos CSS -->
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- A área do conteúdo principal será carregada aqui -->
   <div id="root"></div>
-  <script type="module" src="app.js"></script>
+
+  <!-- Importando Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
+
+  <!-- Carregar o app.js -->
+  <script src="app.js"></script>  <!-- Certifique-se de que o app.js está no mesmo diretório -->
+
+  <script>
+    // Aguarda o carregamento completo do DOM antes de executar o código
+    document.addEventListener("DOMContentLoaded", function() {
+      console.log('Página carregada!');
+    });
+  </script>
 </body>
 </html>
