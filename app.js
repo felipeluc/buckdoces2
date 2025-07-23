@@ -190,19 +190,9 @@ window.enviarComprovante = () => {
     return;
   }
 
-  const listaProdutos = produtosSelecionados.map(p => `- ${p}`).join("\\n");
+  const listaProdutos = produtosSelecionados.map(p => `- ${p}`).join("\n");
 
-  const mensagem = `Olá ${cliente}!
-
-Segue o comprovante da sua compra na Ana Buck Doces:
-
-Produtos:
-${listaProdutos}
-
-Valor: R$ ${valor}
-Status: ${status.toUpperCase()}${status !== "pago" ? `\\nPagamento para: ${dataReceber}` : ""}
-
-Agradecemos pela preferência! 😊`;
+  const mensagem = `Olá ${cliente}!\n\nSegue o comprovante da sua compra na Ana Buck Doces:\n\nProdutos:\n${listaProdutos}\n\nValor: R$ ${valor}\nStatus: ${status.toUpperCase()}${status !== "pago" ? `\nPagamento para: ${dataReceber}` : ""}\n\nAgradecemos pela preferência! 😊`;
 
   const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
   window.open(link, "_blank");
@@ -294,6 +284,9 @@ window.mostrarDia = (dataCompleta) => {
   const cards = Object.entries(grupos).map(([telefone, vendas]) => {
     const nome = vendas[0].cliente;
     const total = vendas.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || parseFloat(v.valor) || 0), 0);
+    const recebido = vendas.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
+    const falta = total;
+
     const status = vendas.every(v => v.status === "pago") ? "✅ Pago" : "🔔 Pendência";
 
     const compras = vendas.map(v => {
@@ -312,11 +305,17 @@ window.mostrarDia = (dataCompleta) => {
       `;
     }).join("<hr>");
 
+    const infoParcial = recebido > 0
+      ? `<p><strong>Pago parcial:</strong> R$ ${recebido.toFixed(2)}</p>
+         <p><strong>Falta pagar:</strong> R$ ${falta.toFixed(2)}</p>`
+      : "";
+
     return `
       <div class="card">
         <h3>${nome} - ${telefone}</h3>
         <p><strong>Status:</strong> ${status}</p>
         <p><strong>Total:</strong> R$ ${total.toFixed(2)}</p>
+        ${infoParcial}
         ${compras}
         <button onclick="marcarPagoGrupo('${telefone}', '${dataCompleta}')">Pago</button>
         <button onclick="marcarParcialGrupo('${telefone}', '${dataCompleta}')">Pago Parcial</button>
@@ -330,7 +329,6 @@ window.mostrarDia = (dataCompleta) => {
 
   document.getElementById("detalhesDia").innerHTML = `<h3>${formatarData(dataCompleta)}</h3>${cards}`;
 };
-
 window.marcarPagoGrupo = async (telefone, dataCompleta) => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.filter(doc => {
@@ -342,13 +340,14 @@ window.marcarPagoGrupo = async (telefone, dataCompleta) => {
     await updateDoc(doc(db, "vendas", docRef.id), {
       status: "pago",
       faltaReceber: 0,
+      valorParcial: null,
       dataReceber: null
     });
   }
 
   alert("Status atualizado para 'pago'.");
   mostrarDia(dataCompleta);
-  showDashboard(); // Atualiza o dashboard também
+  showDashboard(); // Atualiza o dashboard
 };
 
 window.marcarParcialGrupo = (telefone, dataCompleta) => {
@@ -377,13 +376,23 @@ window.confirmarParcial = async (telefone, dataCompleta) => {
     return v.telefone === telefone && v.dataReceber === dataCompleta && v.status !== "pago";
   });
 
+  // Atualiza apenas a primeira venda com os valores parciais
+  let atualizou = false;
   for (const docRef of vendas) {
-    await updateDoc(doc(db, "vendas", docRef.id), {
-      status: "parcial",
-      valorParcial: recebido,
-      faltaReceber: falta,
-      dataReceber: novaData
-    });
+    if (!atualizou) {
+      await updateDoc(doc(db, "vendas", docRef.id), {
+        status: "parcial",
+        valorParcial: recebido,
+        faltaReceber: falta,
+        dataReceber: novaData
+      });
+      atualizou = true;
+    } else {
+      await updateDoc(doc(db, "vendas", docRef.id), {
+        status: "parcial",
+        dataReceber: novaData
+      });
+    }
   }
 
   alert("Pagamento parcial registrado!");
@@ -399,7 +408,10 @@ window.cobrarWhats = (telefone, dataCompleta) => {
   const nome = grupo[0].cliente;
   const dataAgendada = formatarData(grupo[0].dataReceber);
   const datasCompras = grupo.map(v => formatarData(v.data)).join(" | ");
-  const total = grupo.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || parseFloat(v.valor)), 0);
+
+  const total = grupo.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
+  const pago = grupo.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
+  const falta = grupo.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || parseFloat(v.valor) || 0), 0);
 
   const listaProdutos = grupo.flatMap(v => v.produtosVendidos || [])
     .map(p => `${p}`)
@@ -410,14 +422,16 @@ window.cobrarWhats = (telefone, dataCompleta) => {
               `Data agendada para pagamento: ${dataAgendada}\n\n` +
               `Datas das compra: ${datasCompras}\n\n` +
               `Produtos e quantidades:\n${listaProdutos}\n\n` +
-              `Valor total: R$ ${total.toFixed(2)}\n\n` +
-              `Por favor realizar o pagamento conforme nosso combinado, qualquer dúvida estou à disposição!\n\n` +
+              `Valor total: R$ ${total.toFixed(2)}\n` +
+              `Pago parcial: R$ ${pago.toFixed(2)}\n` +
+              `Falta pagar: R$ ${falta.toFixed(2)}\n\n` +
+              `Chave PIX para pagamento: 57.010.512/0001-56\n\n` +
+              `Por favor, realizar o pagamento conforme combinado e enviar o comprovante aqui.\n\n` +
               `— Ana Buck Doces`;
 
   const link = `https://wa.me/${telefone}?text=${encodeURIComponent(msg)}`;
   window.open(link, "_blank");
 };
-
 window.reagendarGrupo = (telefone, dataCompleta) => {
   const div = document.getElementById(`reagendar-${telefone}`);
   div.innerHTML = `
