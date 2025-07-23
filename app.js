@@ -60,6 +60,7 @@ function showTabs(user) {
     <div id="conteudo" class="card"></div>
   `;
 }
+
 const produtosLista = [
   "Cone", "Trufa", "Bolo de pote", "Pão de mel",
   "Escondidinho de uva", "Bombom de uva", "BomBom de morango",
@@ -70,10 +71,10 @@ window.showCadastro = (usuario) => {
   const produtoOptions = produtosLista
     .map((produto, index) => `
       <div style="display: flex; align-items: center; margin-bottom: 5px;">
-        <label style="flex: 1;">${produto}</label>
-        <button onclick="alterarQuantidade(${index}, -1)">-</button>
-        <span id="quantidade-${index}" style="margin: 0 5px;">0</span>
-        <button onclick="alterarQuantidade(${index}, 1)">+</button>
+        <label style="flex: 1; font-size: 16px;">${produto}</label>
+        <button onclick="alterarQuantidade(${index}, -1)" style="font-size: 14px; padding: 5px;">-</button>
+        <span id="quantidade-${index}" style="margin: 0 5px; font-size: 16px;">0</span>
+        <button onclick="alterarQuantidade(${index}, 1)" style="font-size: 14px; padding: 5px;">+</button>
       </div>
     `).join("");
 
@@ -133,6 +134,7 @@ function obterProdutosSelecionados() {
     })
     .filter(Boolean);
 }
+
 window.cadastrar = async (usuario) => {
   const cliente = document.getElementById("cliente").value.trim();
   const telefone = document.getElementById("telefone").value.trim();
@@ -200,258 +202,4 @@ window.enviarComprovante = () => {
 
   const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
   window.open(link, "_blank");
-};
-window.showDashboard = async () => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(doc => doc.data());
-  const hoje = new Date().toISOString().split("T")[0];
-  const hojeVendas = vendas.filter(v => v.data === hoje);
-  const totalHoje = hojeVendas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
-  const aReceber = vendas.filter(v => v.status !== "pago")
-                         .reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || parseFloat(v.valor) || 0), 0);
-
-  let html = `<h2>Dashboard</h2>
-    <p>Vendas hoje: ${hojeVendas.length}</p>
-    <p>Total vendido: R$ ${totalHoje.toFixed(2)}</p>
-    <p>A receber: R$ ${aReceber.toFixed(2)}</p>`;
-
-  document.getElementById("conteudo").innerHTML = html;
-};
-
-window.showCobranca = async () => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-  let html = `<h2>Cobrança</h2>
-    <input type="month" id="mesFiltro" />
-    <div id="calendario"></div>
-    <div id="detalhesDia"></div>`;
-
-  document.getElementById("conteudo").innerHTML = html;
-
-  document.getElementById("mesFiltro").addEventListener("change", e => {
-    const mes = e.target.value;
-    if (!mes) return;
-
-    const dias = {};
-    vendas.forEach(v => {
-      const dia = v.dataReceber;
-      if (v.status !== "pago" && dia?.startsWith(mes)) {
-        const d = dia.split("-")[2];
-        if (!dias[d]) dias[d] = [];
-        dias[d].push(v);
-      }
-    });
-
-    const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
-      const diaStr = String(i + 1).padStart(2, "0");
-      const vendasDoDia = dias[diaStr] || [];
-      const totalDia = vendasDoDia.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || parseFloat(v.valor) || 0), 0);
-      const valorHtml = totalDia > 0 ? `<div class="calendar-day-value">R$ ${totalDia.toFixed(2)}</div>` : "";
-      return `
-        <div class="calendar-day" onclick="mostrarDia('${mes}-${diaStr}')">
-          <div>${diaStr}</div>
-          ${valorHtml}
-        </div>`;
-    }).join("");
-
-    document.getElementById("calendario").innerHTML = `<div class="calendar">${calendarioHtml}</div>`;
-  });
-};
-window.mostrarDia = (dataCompleta) => {
-  const snap = localStorage.getItem("vendas");
-  const todasVendas = JSON.parse(snap);
-  const vendasDoDia = todasVendas.filter(v => v.dataReceber === dataCompleta);
-
-  if (!vendasDoDia.length) {
-    document.getElementById("detalhesDia").innerHTML = "<p>Sem cobranças neste dia.</p>";
-    return;
-  }
-
-  // Agrupar por telefone
-  const grupos = {};
-  vendasDoDia.forEach(v => {
-    const tel = v.telefone || "sem-telefone";
-    if (!grupos[tel]) grupos[tel] = [];
-    grupos[tel].push(v);
-  });
-
-  const cards = Object.entries(grupos).map(([telefone, vendas]) => {
-    const nome = vendas[0].cliente;
-    const total = vendas.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || parseFloat(v.valor) || 0), 0);
-    const status = vendas.every(v => v.status === "pago") ? "✅ Pago" : "🔔 Pendência";
-    const compras = vendas.map(v => `
-      <div class="compra-info">
-        <p><strong>Data:</strong> ${v.data}</p>
-        <p><strong>Local:</strong> ${v.local}</p>
-        <p><strong>Valor:</strong> R$ ${(parseFloat(v.valor)).toFixed(2)}</p>
-        <p><strong>Status:</strong> ${v.status}</p>
-        <p><strong>Forma de Pagamento:</strong> ${v.forma || "-"}</p>
-        <p><strong>Para pagar em:</strong> ${v.dataReceber || "-"}</p>
-        <p><strong>Produtos:</strong><br> ${Object.entries(v.produtosVendidos || {}).map(([p, q]) => `${p}: ${q}`).join(", ")}</p>
-      </div>
-    `).join("<hr>");
-
-    return `
-      <div class="card">
-        <h3>${nome} - ${telefone}</h3>
-        <p><strong>Status:</strong> ${status}</p>
-        <p><strong>Total:</strong> R$ ${total.toFixed(2)}</p>
-        ${compras}
-        <button onclick="marcarPagoGrupo('${telefone}', '${dataCompleta}')">Pago</button>
-        <button onclick="cobrarWhats('${telefone}', '${dataCompleta}')">Cobrar no WhatsApp</button>
-        <button onclick="cobrarDeNovo('${telefone}', '${dataCompleta}')">Cobrar de novo</button>
-        <button onclick="reagendarGrupo('${telefone}', '${dataCompleta}')">Reagendar cobrança</button>
-        <div id="reagendar-${telefone}"></div>
-      </div>
-    `;
-  }).join("");
-
-  document.getElementById("detalhesDia").innerHTML = `<h3>${dataCompleta}</h3>${cards}`;
-};
-window.marcarPagoGrupo = async (telefone, dataCompleta) => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const docs = snap.docs.filter(doc => {
-    const d = doc.data();
-    return d.telefone === telefone && d.dataReceber === dataCompleta && d.status !== "pago";
-  });
-
-  for (const docRef of docs) {
-    await updateDoc(doc(db, "vendas", docRef.id), {
-      status: "pago",
-      faltaReceber: 0,
-      dataReceber: null
-    });
-  }
-
-  alert("Status atualizado para 'pago'.");
-  showCobranca();
-};
-
-window.reagendarGrupo = (telefone, dataCompleta) => {
-  document.getElementById(`reagendar-${telefone}`).innerHTML = `
-    <input type="date" id="novaData-${telefone}" />
-    <button onclick="salvarReagendamentoGrupo('${telefone}', '${dataCompleta}')">Salvar nova data</button>
-  `;
-};
-
-window.salvarReagendamentoGrupo = async (telefone, dataCompleta) => {
-  const novaData = document.getElementById(`novaData-${telefone}`).value;
-  if (!novaData) return alert("Selecione uma nova data.");
-
-  const snap = await getDocs(collection(db, "vendas"));
-  const docs = snap.docs.filter(doc => {
-    const d = doc.data();
-    return d.telefone === telefone && d.dataReceber === dataCompleta && d.status !== "pago";
-  });
-
-  for (const docRef of docs) {
-    await updateDoc(doc(db, "vendas", docRef.id), {
-      dataReceber: novaData
-    });
-  }
-
-  alert("Cobrança reagendada com sucesso!");
-  showCobranca();
-};
-
-window.cobrarWhats = (telefone, dataCompleta) => {
-  const snap = JSON.parse(localStorage.getItem("vendas"));
-  const grupo = snap.filter(v => v.telefone === telefone && v.dataReceber === dataCompleta && v.status !== "pago");
-
-  if (!grupo.length) return alert("Nenhuma cobrança ativa encontrada.");
-
-  const nome = grupo[0].cliente;
-  const total = grupo.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || parseFloat(v.valor)), 0);
-
-  const lista = grupo.map(v => {
-    const produtos = Object.entries(v.produtosVendidos || {})
-      .map(([p, q]) => `${p}: ${q}`).join(", ");
-    return `• ${v.data} - R$ ${v.valor.toFixed(2)} - ${produtos}`;
-  }).join("\n");
-
-  const msg = `Olá ${nome}! 💬\nVocê possui compras pendentes para pagamento:\n\n${lista}\n\nTotal: R$ ${total.toFixed(2)}\n\nPor favor, realizar o pagamento conforme combinado. 🍬`;
-
-  const link = `https://wa.me/${telefone}?text=${encodeURIComponent(msg)}`;
-  window.open(link, "_blank");
-};
-
-window.cobrarDeNovo = (telefone, dataCompleta) => {
-  const snap = JSON.parse(localStorage.getItem("vendas"));
-  const grupo = snap.filter(v => v.telefone === telefone && v.dataReceber === dataCompleta && v.status === "pago");
-
-  if (!grupo.length) return alert("Nenhuma cobrança paga encontrada.");
-
-  const nome = grupo[0].cliente;
-  const total = grupo.reduce((acc, v) => acc + (parseFloat(v.valor)), 0);
-
-  const lista = grupo.map(v => {
-    const produtos = Object.entries(v.produtosVendidos || {})
-      .map(([p, q]) => `${p}: ${q}`).join(", ");
-    return `• ${v.data} - R$ ${v.valor.toFixed(2)} - ${produtos}`;
-  }).join("\n");
-
-  const msg = `Olá ${nome}! 😊\nAqui está o resumo das suas compras já pagas:\n\n${lista}\n\nTotal: R$ ${total.toFixed(2)}\n\nAgradecemos pela preferência! 🍬`;
-
-  const link = `https://wa.me/${telefone}?text=${encodeURIComponent(msg)}`;
-  window.open(link, "_blank");
-};
-window.showDashboard = async () => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(doc => doc.data());
-  const hoje = new Date().toISOString().split("T")[0];
-  const hojeVendas = vendas.filter(v => v.data === hoje);
-  const totalHoje = hojeVendas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
-  const aReceber = vendas.filter(v => v.status !== "pago")
-                         .reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || parseFloat(v.valor) || 0), 0);
-
-  let html = `<h2>Dashboard</h2>
-    <p>Vendas hoje: ${hojeVendas.length}</p>
-    <p>Total vendido hoje: R$ ${totalHoje.toFixed(2)}</p>
-    <p>Valor a receber: R$ ${aReceber.toFixed(2)}</p>`;
-
-  document.getElementById("conteudo").innerHTML = html;
-};
-
-window.showCobranca = async () => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  const pendentes = vendas.filter(v => v.status !== "pago" && v.dataReceber);
-
-  // ✅ Armazenar para uso nas funções de WhatsApp
-  localStorage.setItem("vendas", JSON.stringify(vendas));
-
-  let html = `<h2>Cobrança</h2>
-    <input type="month" id="mesFiltro" />
-    <div id="calendario"></div>
-    <div id="detalhesDia"></div>`;
-
-  document.getElementById("conteudo").innerHTML = html;
-
-  document.getElementById("mesFiltro").addEventListener("change", e => {
-    const mes = e.target.value;
-    if (!mes) return;
-    const diasDoMes = {};
-    pendentes.forEach(v => {
-      if (v.dataReceber?.startsWith(mes)) {
-        const dia = v.dataReceber.split("-")[2];
-        if (!diasDoMes[dia]) diasDoMes[dia] = [];
-        diasDoMes[dia].push(v);
-      }
-    });
-
-    const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
-      const diaStr = String(i + 1).padStart(2, "0");
-      const vendasDoDia = diasDoMes[diaStr] || [];
-      const totalDia = vendasDoDia.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || parseFloat(v.valor) || 0), 0);
-      const valorHtml = totalDia > 0 ? `<div class="calendar-day-value">R$ ${totalDia.toFixed(2)}</div>` : "";
-      return `
-        <div class="calendar-day" onclick="mostrarDia('${mes}-${diaStr}')">
-          <div>${diaStr}</div>
-          ${valorHtml}
-        </div>`;
-    }).join("");
-
-    document.getElementById("calendario").innerHTML = `<div class="calendar">${calendarioHtml}</div>`;
-  });
 };
