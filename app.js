@@ -270,7 +270,6 @@ window.mostrarDia = (dataCompleta) => {
     return;
   }
 
-  // Agrupar por telefone
   const grupos = {};
   vendasDoDia.forEach(v => {
     const tel = v.telefone || "sem-telefone";
