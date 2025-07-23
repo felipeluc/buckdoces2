@@ -1,0 +1,122 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #fff6f6;
+  color: #333;
+}
+
+h1, h2, h3 {
+  color: #d87a93; /* tom rose */
+  text-align: center;
+}
+
+input, select, button {
+  display: block;
+  margin: 10px auto;
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 400px;
+}
+
+button {
+  background-color: #f9c5d5;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+button:hover {
+  background-color: #f5a4bd;
+}
+
+.card {
+  background: #fff;
+  margin: 20px auto;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 0 10px rgba(200, 100, 120, 0.1);
+  max-width: 600px;
+}
+
+.calendar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 20px;
+}
+
+.calendar-day {
+  width: 70px;
+  height: 70px;
+  border-radius: 10px;
+  background: #ffe9ef;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  font-weight: bold;
+  box-shadow: 0 0 4px rgba(0,0,0,0.1);
+}
+
+.calendar-day:hover {
+  background-color: #fbd0dd;
+}
+
+.calendar-day-value {
+  font-size: 14px;
+  color: #c94f70;
+  font-weight: bold;
+}
+
+.produto-quantidade {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 6px 0;
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.produto-quantidade span {
+  font-size: 14px;
+}
+
+.produto-quantidade button {
+  padding: 2px 8px;
+  font-size: 16px;
+  background: #ffd6e2;
+  border-radius: 6px;
+  margin: 0 5px;
+}
+
+.produto-quantidade button:hover {
+  background: #ffc3d3;
+}
+
+.pago {
+  color: green;
+  font-weight: bold;
+}
+
+.nao-pago {
+  color: red;
+  font-weight: bold;
+}
+
+.parcial {
+  color: orange;
+  font-weight: bold;
+}
+
+/* Centralização da tela de login */
+#root > h1, #root > .card {
+  margin-top: 60px;
+  text-align: center;
+}
