@@ -69,10 +69,10 @@ window.showCadastro = (usuario) => {
   const produtoOptions = produtosLista
     .map((produto, index) => `
       <div style="display: flex; align-items: center; margin-bottom: 5px;">
-        <label style="flex: 1;">${produto}</label>
-        <button onclick="alterarQuantidade(${index}, -1)">-</button>
-        <span id="quantidade-${index}" style="margin: 0 5px;">0</span>
-        <button onclick="alterarQuantidade(${index}, 1)">+</button>
+        <label style="flex: 1; font-size: 14px;">${produto}</label>
+        <button onclick="alterarQuantidade(${index}, -1)" style="font-size: 14px; padding: 5px;">-</button>
+        <span id="quantidade-${index}" style="margin: 0 5px; font-size: 16px;">0</span>
+        <button onclick="alterarQuantidade(${index}, 1)" style="font-size: 14px; padding: 5px;">+</button>
       </div>
     `).join("");
 
