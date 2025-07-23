@@ -21,8 +21,8 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 document.getElementById("root").innerHTML = `
-  <h1>Buck Doces</h1>
-  <div class="card">
+  <h1 style="text-align: center; color: #d48c94">Buck Doces</h1>
+  <div class="card login-card">
     <select id="user">
       <option>Ana Buck</option>
       <option>João Buck</option>
@@ -35,7 +35,7 @@ document.getElementById("root").innerHTML = `
 
 const senhas = {
   "Ana Buck": "Ana1234",
-  "João Buck": "Joao1234"
+  "João Buck": "João1234"
 };
 
 window.login = () => {
@@ -67,14 +67,12 @@ const produtosLista = [
 
 window.showCadastro = (usuario) => {
   const produtoOptions = produtosLista
-    .map((p, index) => `
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
-        <label>${p}</label>
-        <div style="display: flex; gap: 5px;">
-          <button onclick="alterarQtd(${index}, -1)">-</button>
-          <input type="number" id="qtd-${index}" value="0" min="0" style="width: 40px; text-align:center;" readonly />
-          <button onclick="alterarQtd(${index}, 1)">+</button>
-        </div>
+    .map((produto, index) => `
+      <div style="display: flex; align-items: center; margin-bottom: 5px;">
+        <label style="flex: 1; font-size: 14px;">${produto}</label>
+        <button onclick="alterarQuantidade(${index}, -1)" style="font-size: 12px; padding: 5px;">-</button>
+        <span id="quantidade-${index}" style="margin: 0 5px; font-size: 16px;">0</span>
+        <button onclick="alterarQuantidade(${index}, 1)" style="font-size: 12px; padding: 5px;">+</button>
       </div>
     `).join("");
 
@@ -84,7 +82,7 @@ window.showCadastro = (usuario) => {
     <input id="telefone" placeholder="Telefone (ex: 5599999999999)" />
     <input id="local" placeholder="Local da venda" />
     <input id="valor" placeholder="Valor (R$)" type="number" />
-    <div><strong>Produtos vendidos:</strong><br>${produtoOptions}</div>
+    <div><strong>Produtos vendidos:</strong>${produtoOptions}</div>
     <select id="status">
       <option value="pago">Pago</option>
       <option value="nao">Não pago</option>
@@ -118,49 +116,22 @@ window.showCadastro = (usuario) => {
 };
 
 // Função para alterar a quantidade de um produto
-window.alterarQtd = (index, delta) => {
-  const input = document.getElementById(`qtd-${index}`);
-  let atual = parseInt(input.value);
-  atual = isNaN(atual) ? 0 : atual + delta;
-  input.value = atual < 0 ? 0 : atual;
+window.alterarQuantidade = (index, delta) => {
+  const span = document.getElementById(`quantidade-${index}`);
+  let valor = parseInt(span.innerText);
+  valor = Math.max(0, valor + delta);
+  span.innerText = valor;
 };
 
-// Enviar comprovante via WhatsApp
-window.enviarComprovante = () => {
-  const numero = document.getElementById("telefone")?.value.trim();
-  const valor = document.getElementById("valor")?.value.trim();
-  const cliente = document.getElementById("cliente")?.value.trim();
-  const status = document.getElementById("status")?.value;
-  const dataReceber = document.getElementById("dataReceber")?.value || "";
-  const valorParcial = document.getElementById("valorParcial")?.value || "";
-  const falta = document.getElementById("falta")?.value || "";
-
-  const produtos = produtosLista.map((p, i) => {
-    const qtd = parseInt(document.getElementById(`qtd-${i}`).value);
-    return qtd > 0 ? `${p} x${qtd}` : null;
-  }).filter(Boolean).join("\n");
-
-  if (!numero || !valor || !cliente) {
-    alert("Preencha nome, telefone e valor.");
-    return;
-  }
-
-  let msg = `Olá ${cliente}! Segue o comprovante da sua compra na Ana Buck Doces:\n\n` +
-            `Produtos:\n${produtos}\n\nValor: R$ ${valor}\nForma: ${status.toUpperCase()}\n`;
-
-  if (status === "parcial") {
-    msg += `Valor pago: R$ ${valorParcial}\nFalta: R$ ${falta}\n`;
-  }
-
-  if (status !== "pago" && dataReceber) {
-    msg += `Data para pagamento: ${dataReceber}\n`;
-  }
-
-  msg += `\nAgradecemos pela preferência! 😊`;
-
-  const link = `https://wa.me/${numero}?text=${encodeURIComponent(msg)}`;
-  window.open(link, "_blank");
-};
+// Gera lista de produtos selecionados com quantidades
+function obterProdutosSelecionados() {
+  return produtosLista
+    .map((produto, index) => {
+      const quantidade = parseInt(document.getElementById(`quantidade-${index}`).innerText);
+      return quantidade > 0 ? `${produto} (${quantidade})` : null;
+    })
+    .filter(Boolean);
+}
 
 window.cadastrar = async (usuario) => {
   const cliente = document.getElementById("cliente").value.trim();
@@ -177,7 +148,7 @@ window.cadastrar = async (usuario) => {
   // Captura produtos com quantidade
   const produtosVendidos = produtosLista
     .map((p, i) => {
-      const qtd = parseInt(document.getElementById(`qtd-${i}`).value || 0);
+      const qtd = parseInt(document.getElementById(`quantidade-${i}`).value || 0);
       return qtd > 0 ? { nome: p, quantidade: qtd } : null;
     })
     .filter(Boolean);
@@ -224,6 +195,42 @@ window.cadastrar = async (usuario) => {
   alert("Venda salva!");
 };
 
+window.enviarComprovante = () => {
+  const numero = document.getElementById("telefone")?.value.trim();
+  const valor = document.getElementById("valor")?.value.trim();
+  const cliente = document.getElementById("cliente")?.value.trim();
+  const status = document.getElementById("status")?.value;
+  const dataReceber = document.getElementById("dataReceber")?.value || "";
+  const valorParcial = document.getElementById("valorParcial")?.value || "";
+  const falta = document.getElementById("falta")?.value || "";
+
+  const produtos = produtosLista.map((p, i) => {
+    const qtd = parseInt(document.getElementById(`qtd-${i}`).value);
+    return qtd > 0 ? `${p} x${qtd}` : null;
+  }).filter(Boolean).join("\n");
+
+  if (!numero || !valor || !cliente) {
+    alert("Preencha nome, telefone e valor.");
+    return;
+  }
+
+  let msg = `Olá ${cliente}! Segue o comprovante da sua compra na Ana Buck Doces:\n\n` +
+            `Produtos:\n${produtos}\n\nValor: R$ ${valor}\nForma: ${status.toUpperCase()}\n`;
+
+  if (status === "parcial") {
+    msg += `Valor pago: R$ ${valorParcial}\nFalta: R$ ${falta}\n`;
+  }
+
+  if (status !== "pago" && dataReceber) {
+    msg += `Data para pagamento: ${dataReceber}\n`;
+  }
+
+  msg += `\nAgradecemos pela preferência! 😊`;
+
+  const link = `https://wa.me/${numero}?text=${encodeURIComponent(msg)}`;
+  window.open(link, "_blank");
+};
+
 window.showDashboard = async () => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => doc.data());
@@ -256,18 +263,20 @@ window.showCobranca = async () => {
   document.getElementById("mesFiltro").addEventListener("change", e => {
     const mes = e.target.value;
     if (!mes) return;
-    const diasDoMes = {};
-    pendentes.forEach(v => {
-      if (v.dataReceber?.startsWith(mes)) {
-        const dia = v.dataReceber.split("-")[2];
-        if (!diasDoMes[dia]) diasDoMes[dia] = [];
-        diasDoMes[dia].push(v);
+
+    const dias = {};
+    vendas.forEach(v => {
+      const dia = v.dataReceber;
+      if (v.status !== "pago" && dia?.startsWith(mes)) {
+        const d = dia.split("-")[2];
+        if (!dias[d]) dias[d] = [];
+        dias[d].push(v);
       }
     });
 
     const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
       const diaStr = String(i + 1).padStart(2, "0");
-      const vendasDoDia = diasDoMes[diaStr] || [];
+      const vendasDoDia = dias[diaStr] || [];
       const totalDia = vendasDoDia.reduce((acc, v) => acc + (v.faltaReceber || v.valor), 0);
       const valorHtml = totalDia > 0 ? `<div class="calendar-day-value">R$ ${totalDia.toFixed(2)}</div>` : "";
       return `
