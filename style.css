@@ -1,107 +1,106 @@
 body {
   font-family: Arial, sans-serif;
-  background-color: #fff0f5;
+  background-color: #fff0f3;
   margin: 0;
   padding: 0;
-  color: #333;
 }
 
-h1, h2, h3 {
-  color: #d48c94;
-}
-
-input, select, button {
-  padding: 10px;
-  margin: 5px 0;
-  border-radius: 8px;
-  font-size: 1em;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-button {
-  background-color: #f472b6;
-  color: white;
-  border: none;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-button:hover {
-  background-color: #ec4899;
+h1 {
+  margin-top: 20px;
 }
 
 .card {
   background: #fff;
-  border: 2px solid #fbcfe8;
   border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  margin: 20px auto;
   padding: 20px;
-  margin: 15px auto;
   max-width: 500px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  width: 90%;
 }
 
 .login-card {
-  max-width: 300px;
   text-align: center;
 }
 
+input, select, button {
+  display: block;
+  width: 100%;
+  margin: 10px 0;
+  padding: 10px;
+  font-size: 16px;
+  border-radius: 8px;
+  border: 1px solid #e0a6b1;
+}
+
+button {
+  background-color: #e48a98;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.3s;
+}
+
+button:hover {
+  background-color: #d47b89;
+}
+
 .calendar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
   margin-top: 20px;
 }
 
 .calendar-day {
-  background-color: #fda4af;
+  background: #ffe5ec;
   padding: 10px;
   border-radius: 10px;
-  width: 110px;
   text-align: center;
   cursor: pointer;
-  color: white;
-  font-weight: bold;
+  transition: transform 0.2s;
 }
 
 .calendar-day:hover {
-  background-color: #f43f5e;
+  transform: scale(1.05);
+  background-color: #fcd1db;
 }
 
 .calendar-day-value {
-  font-size: 14px;
   margin-top: 5px;
-}
-
-#detalhesDia .card {
-  background: #ffe4e6;
-  border: 1px solid #fbcfe8;
+  font-weight: bold;
+  color: #b83250;
 }
 
 .compra-info {
-  background: #fffafc;
+  background: #fff5f7;
   padding: 10px;
   border-radius: 8px;
   margin-bottom: 10px;
-  border-left: 5px solid #f9a8d4;
+  border-left: 4px solid #f48b94;
 }
 
-input[type="date"], input[type="number"], input[type="text"], select {
-  border: 1px solid #ccc;
+hr {
+  border: none;
+  border-top: 1px solid #f1cdd2;
+  margin: 10px 0;
 }
 
-select:focus, input:focus {
-  outline: 2px solid #f9a8d4;
+h2, h3 {
+  color: #c06078;
 }
 
-/* Responsivo */
+p {
+  margin: 4px 0;
+}
+
+strong {
+  color: #a5405d;
+}
+
 @media screen and (max-width: 600px) {
-  .card {
-    margin: 10px;
-    padding: 15px;
-  }
-
-  .calendar-day {
-    width: 45%;
+  .calendar {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
