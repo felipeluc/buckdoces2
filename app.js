@@ -21,8 +21,8 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 document.getElementById("root").innerHTML = `
-  <h1 style="text-align: center; color: #d48c94">Buck Doces</h1>
-  <div class="card login-card">
+  <h1>Buck Doces</h1>
+  <div class="card">
     <select id="user">
       <option>Ana Buck</option>
       <option>João Buck</option>
@@ -309,8 +309,8 @@ window.showCobranca = async () => {
           <p>Status: ${v.status === "parcial" ? "Parcial" : "Não pago"}</p>
           <p>Para: ${v.dataReceber}</p>
           <p>Produtos:<br>${produtosHtml}</p>
-          <button onclick="marcarPago('${v.id}')">Cobrei - já pago</button>
-          <button onclick="naoPago('${v.id}')">Cobrei - não pago</button>
+          <button onclick="cobrar('${v.id}')">Cobrar</button>
+          <button onclick="cobrarDeNovo('${v.id}')">Cobrar de novo</button>
           <button onclick="reagendar('${v.id}')">Reagendar cobrança</button>
           <div id="reagendar-${v.id}"></div>
         </div>`;
@@ -320,15 +320,27 @@ window.showCobranca = async () => {
   };
 };
 
-window.marcarPago = async (id) => {
-  const ref = doc(db, "vendas", id);
-  await updateDoc(ref, { status: "pago", dataReceber: null, faltaReceber: 0 });
-  alert("Status atualizado para pago");
-  showCobranca();
+// Funções para os botões
+window.cobrar = async (id) => {
+  const venda = await getDoc(doc(db, "vendas", id));
+  const dadosVenda = venda.data();
+
+  const produtos = dadosVenda.produtosVendidos.map(p => `${p.nome} (${p.quantidade})`).join(", ");
+  const msg = `Olá ${dadosVenda.cliente}!\n\nEstamos passando para lembrar que há um valor pendente conosco:\n\nData agendada para pagamento: ${dadosVenda.dataReceber}\nDatas das compras: ${dadosVenda.produtosVendidos.map(p => p.data).join(" | ")}\n\nProdutos e quantidades:\n${produtos}\n\nValor total: ${dadosVenda.valor}\n\nPor favor, realizar o pagamento conforme nosso combinado. Qualquer dúvida estou à disposição!\n\n— Ana Buck Doces`;
+
+  const link = `https://wa.me/${dadosVenda.telefone}?text=${encodeURIComponent(msg)}`;
+  window.open(link, "_blank");
 };
 
-window.naoPago = async (id) => {
-  alert("A venda continua marcada como não paga.");
+window.cobrarDeNovo = async (id) => {
+  const venda = await getDoc(doc(db, "vendas", id));
+  const dadosVenda = venda.data();
+
+  const produtos = dadosVenda.produtosVendidos.map(p => `${p.nome} (${p.quantidade})`).join(", ");
+  const msg = `Olá ${dadosVenda.cliente}!\n\nEstamos passando para lembrar que há um valor pendente conosco:\n\nData agendada para pagamento: ${dadosVenda.dataReceber}\nDatas das compras: ${dadosVenda.produtosVendidos.map(p => p.data).join(" | ")}\n\nProdutos e quantidades:\n${produtos}\n\nValor total: ${dadosVenda.valor}\n\nPor favor, realizar o pagamento conforme nosso combinado. Qualquer dúvida estou à disposição!\n\n— Ana Buck Doces`;
+
+  const link = `https://wa.me/${dadosVenda.telefone}?text=${encodeURIComponent(msg)}`;
+  window.open(link, "_blank");
 };
 
 window.reagendar = (id) => {
