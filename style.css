@@ -1,106 +1,100 @@
+/* Definindo a cor de fundo e o estilo do corpo */
 body {
   font-family: Arial, sans-serif;
+  background-color: #f0f0f0;
+  color: #333;
   margin: 0;
   padding: 0;
-  background-color: #fff6f6;
-  color: #333;
 }
 
-h1, h2, h3 {
-  color: #d87a93; /* tom rose */
+/* Estilo para o título principal */
+h1 {
+  font-size: 2em;
   text-align: center;
-}
-
-input, select, button {
-  display: block;
-  margin: 10px auto;
-  padding: 10px;
-  font-size: 16px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 400px;
-}
-
-button {
-  background-color: #f9c5d5;
-  color: #d87a93; /* ajustando para o tom de rose */
-  border: none;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
-button:hover {
-  background-color: #f5a4bd;
-}
-
-/* Estilo dos cards */
-.card {
-  background: #fff;
-  margin: 20px auto;
+  color: #d48c94;  /* Tom de rose */
   padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 0 10px rgba(200, 100, 120, 0.1);
-  max-width: 600px;
-  text-align: left;
-  margin-bottom: 20px;
 }
 
-/* Estilo do calendário */
+/* Estilo para os containers principais */
+.card {
+  background-color: #fff;
+  padding: 20px;
+  margin: 10px;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.card button {
+  background-color: #d48c94; /* Cor de fundo rosa */
+  color: white;
+  border: none;
+  padding: 10px;
+  font-size: 14px;
+  border-radius: 5px;
+  cursor: pointer;
+  margin: 5px;
+}
+
+.card button:hover {
+  background-color: #b17f79; /* Cor mais escura no hover */
+}
+
+/* Estilo para inputs e selects */
+input, select {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+/* Ajustando o layout de cards na visualização de cobrança */
 .calendar {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr); /* 7 colunas */
+  gap: 10px;
 }
 
 .calendar-day {
-  width: 70px;
-  height: 70px;
-  border-radius: 10px;
-  background: #ffe9ef;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  background-color: #fff;
+  padding: 15px;
+  border-radius: 5px;
+  text-align: center;
   cursor: pointer;
-  font-weight: bold;
-  box-shadow: 0 0 4px rgba(0,0,0,0.1);
 }
 
 .calendar-day:hover {
-  background-color: #fbd0dd;
+  background-color: #f0f0f0;
 }
 
 .calendar-day-value {
-  font-size: 14px;
-  color: #c94f70; /* tom de rose escuro */
+  font-weight: bold;
+  color: #d48c94;
 }
 
-/* Estilo dos produtos no cadastro de venda */
-.produto-quantidade {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 6px 0;
-  padding: 4px 8px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+/* Detalhes das cobranças */
+#detalhesDia {
+  margin-top: 20px;
 }
 
-.produto-quantidade span {
-  font-size: 14px;
+.card .compra-info {
+  padding: 10px;
+  margin-top: 10px;
+  background-color: #f9f9f9;
+  border-radius: 5px;
 }
 
-.produto-quantidade button {
-  padding: 2px 8px;
-  font-size: 16px;
-  background: #ffd6e2;
-  border-radius: 6px;
-  margin: 0 5px;
+.card .compra-info p {
+  margin: 5px 0;
 }
 
-.produto-quantidade button:hover {
-  background: #ffc3d3;
+/* Responsividade */
+@media (max-width: 768px) {
+  .calendar {
+    grid-template-columns: repeat(3, 1fr); /* 3 colunas em telas menores */
+  }
+
+  .card {
+    padding: 15px;
+  }
 }
