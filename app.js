@@ -222,7 +222,6 @@ window.showDashboard = async () => {
 window.showCobranca = async () => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  const pendentes = vendas.filter(v => v.status !== "pago" && v.dataReceber);
 
   let html = `<h2>Cobrança</h2>
     <input type="month" id="mesFiltro" />
@@ -259,4 +258,57 @@ window.showCobranca = async () => {
 
     document.getElementById("calendario").innerHTML = `<div class="calendar">${calendarioHtml}</div>`;
   });
+};
+
+window.mostrarDia = (dataCompleta) => {
+  const snap = localStorage.getItem("vendas");
+  const todasVendas = JSON.parse(snap);
+  const vendasDoDia = todasVendas.filter(v => v.dataReceber === dataCompleta);
+
+  if (!vendasDoDia.length) {
+    document.getElementById("detalhesDia").innerHTML = "<p>Sem cobranças neste dia.</p>";
+    return;
+  }
+
+  // Agrupar por telefone
+  const grupos = {};
+  vendasDoDia.forEach(v => {
+    const tel = v.telefone || "sem-telefone";
+    if (!grupos[tel]) grupos[tel] = [];
+    grupos[tel].push(v);
+  });
+
+  const cards = Object.entries(grupos).map(([telefone, vendas]) => {
+    const nome = vendas[0].cliente;
+    const total = vendas.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || parseFloat(v.valor) || 0), 0);
+    const status = vendas.every(v => v.status === "pago") ? "✅ Pago" : "🔔 Pendência";
+    const compras = vendas.map(v => `
+      <div class="compra-info">
+        <p><strong>Data:</strong> ${v.dataReceber.split("-").reverse().join("-")}</p>
+        <p><strong>Local:</strong> ${v.local}</p>
+        <p><strong>Valor:</strong> R$ ${(parseFloat(v.valor)).toFixed(2)}</p>
+        <p><strong>Status:</strong> ${v.status}</p>
+        <p><strong>Forma de Pagamento:</strong> ${v.forma || "-"}</p>
+        <p><strong>Para pagar em:</strong> ${v.dataReceber || "-"}</p>
+        <p><strong>Produtos:</strong><br> ${Object.entries(v.produtosVendidos || {}).map(([p, q]) => `${p}: ${q}`).join(", ")}</p>
+      </div>
+    `).join("<hr>");
+
+    return `
+      <div class="card">
+        <h3>${nome} - ${telefone}</h3>
+        <p><strong>Status:</strong> ${status}</p>
+        <p><strong>Total:</strong> R$ ${total.toFixed(2)}</p>
+        <hr>
+        ${compras}
+        <button onclick="marcarPagoGrupo('${telefone}', '${dataCompleta}')">Pago</button>
+        <button onclick="cobrarWhats('${telefone}', '${dataCompleta}')">Cobrar no WhatsApp</button>
+        <button onclick="cobrarDeNovo('${telefone}', '${dataCompleta}')">Cobrar de novo</button>
+        <button onclick="reagendarGrupo('${telefone}', '${dataCompleta}')">Reagendar cobrança</button>
+        <div id="reagendar-${telefone}"></div>
+      </div>
+    `;
+  }).join("");
+
+  document.getElementById("detalhesDia").innerHTML = `<h3>${dataCompleta}</h3>${cards}`;
 };
