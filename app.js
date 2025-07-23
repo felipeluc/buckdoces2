@@ -1,5 +1,3 @@
-// PARTE 1 - Inicialização Firebase e Login
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore,
@@ -71,7 +69,7 @@ window.showCadastro = (usuario) => {
   const produtoOptions = produtosLista
     .map((produto, index) => `
       <div style="display: flex; align-items: center; margin-bottom: 5px;">
-        <label style="flex: 1; font-size: 16px;">${produto}</label>
+        <label style="flex: 1; font-size: 14px;">${produto}</label>
         <button onclick="alterarQuantidade(${index}, -1)" style="font-size: 14px; padding: 5px;">-</button>
         <span id="quantidade-${index}" style="margin: 0 5px; font-size: 16px;">0</span>
         <button onclick="alterarQuantidade(${index}, 1)" style="font-size: 14px; padding: 5px;">+</button>
@@ -202,4 +200,63 @@ window.enviarComprovante = () => {
 
   const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
   window.open(link, "_blank");
+};
+
+window.showDashboard = async () => {
+  const snap = await getDocs(collection(db, "vendas"));
+  const vendas = snap.docs.map(doc => doc.data());
+  const hoje = new Date().toISOString().split("T")[0];
+  const hojeVendas = vendas.filter(v => v.data === hoje);
+  const totalHoje = hojeVendas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
+  const aReceber = vendas.filter(v => v.status !== "pago")
+                         .reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || parseFloat(v.valor) || 0), 0);
+
+  let html = `<h2>Dashboard</h2>
+    <p>Vendas hoje: ${hojeVendas.length}</p>
+    <p>Total vendido: R$ ${totalHoje.toFixed(2)}</p>
+    <p>A receber: R$ ${aReceber.toFixed(2)}</p>`;
+
+  document.getElementById("conteudo").innerHTML = html;
+};
+
+window.showCobranca = async () => {
+  const snap = await getDocs(collection(db, "vendas"));
+  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const pendentes = vendas.filter(v => v.status !== "pago" && v.dataReceber);
+
+  let html = `<h2>Cobrança</h2>
+    <input type="month" id="mesFiltro" />
+    <div id="calendario"></div>
+    <div id="detalhesDia"></div>`;
+
+  document.getElementById("conteudo").innerHTML = html;
+
+  document.getElementById("mesFiltro").addEventListener("change", e => {
+    const mes = e.target.value;
+    if (!mes) return;
+
+    const dias = {};
+    vendas.forEach(v => {
+      const dia = v.dataReceber;
+      if (v.status !== "pago" && dia?.startsWith(mes)) {
+        const d = dia.split("-")[2];
+        if (!dias[d]) dias[d] = [];
+        dias[d].push(v);
+      }
+    });
+
+    const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
+      const diaStr = String(i + 1).padStart(2, "0");
+      const vendasDoDia = dias[diaStr] || [];
+      const totalDia = vendasDoDia.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || parseFloat(v.valor) || 0), 0);
+      const valorHtml = totalDia > 0 ? `<div class="calendar-day-value">R$ ${totalDia.toFixed(2)}</div>` : "";
+      return `
+        <div class="calendar-day" onclick="mostrarDia('${mes}-${diaStr}')">
+          <div>${diaStr}</div>
+          ${valorHtml}
+        </div>`;
+    }).join("");
+
+    document.getElementById("calendario").innerHTML = `<div class="calendar">${calendarioHtml}</div>`;
+  });
 };
