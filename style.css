@@ -24,6 +24,7 @@ input, select, button {
 
 button {
   background-color: #f9c5d5;
+  color: #d87a93; /* ajustando para o tom de rose */
   border: none;
   cursor: pointer;
   transition: background-color 0.3s;
@@ -70,8 +71,7 @@ button:hover {
 
 .calendar-day-value {
   font-size: 14px;
-  color: #c94f70;
-  font-weight: bold;
+  color: #c94f70; /* tom de rose escuro */
 }
 
 .produto-quantidade {
