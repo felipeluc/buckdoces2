@@ -34,6 +34,7 @@ button:hover {
   background-color: #f5a4bd;
 }
 
+/* Estilo dos cards */
 .card {
   background: #fff;
   margin: 20px auto;
@@ -43,6 +44,7 @@ button:hover {
   max-width: 600px;
 }
 
+/* Estilo do calendário */
 .calendar {
   display: flex;
   flex-wrap: wrap;
@@ -74,6 +76,7 @@ button:hover {
   color: #c94f70; /* tom de rose escuro */
 }
 
+/* Estilo dos produtos no cadastro de venda */
 .produto-quantidade {
   display: flex;
   align-items: center;
@@ -98,25 +101,4 @@ button:hover {
 
 .produto-quantidade button:hover {
   background: #ffc3d3;
-}
-
-.pago {
-  color: green;
-  font-weight: bold;
-}
-
-.nao-pago {
-  color: red;
-  font-weight: bold;
-}
-
-.parcial {
-  color: orange;
-  font-weight: bold;
-}
-
-/* Centralização da tela de login */
-#root > h1, #root > .card {
-  margin-top: 60px;
-  text-align: center;
 }
