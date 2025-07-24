@@ -474,6 +474,44 @@ window.confirmarParcial = async (telefone, dataCompleta) => {
     return v.telefone === telefone && v.dataReceber === dataCompleta && v.status !== "pago";
   });
 
+  const totalEmAberto = docs.reduce((acc, doc) => {
+    const v = doc.data();
+    const falta = (parseFloat(v.faltaReceber) || (v.status !== "pago" ? parseFloat(v.valor) : 0));
+    return acc + falta;
+  }, 0);
+
+  if (recebidoAgora > totalEmAberto) {
+    alert("Valor recebido é maior do que o total pendente.");
+    return;
+  }
+
+  for (const docRef of docs) {
+    const docId = docRef.id;
+    const v = docRef.data();
+
+    const atualFalta = (parseFloat(v.faltaReceber) || parseFloat(v.valor));
+    const jaRecebido = parseFloat(v.valorParcial || 0);
+
+    const pagoAgora = Math.min(atualFalta, recebidoAgora);
+    const novoFalta = atualFalta - pagoAgora;
+    const novoParcial = jaRecebido + pagoAgora;
+
+    await updateDoc(doc(db, "vendas", docId), {
+      status: novoFalta > 0 ? "parcial" : "pago",
+      valorParcial: novoParcial,
+      faltaReceber: novoFalta,
+      dataReceber: novoFalta > 0 ? novaData : null
+    });
+
+    recebidoAgora -= pagoAgora;
+    if (recebidoAgora <= 0) break;
+  }
+
+  alert("Pagamento parcial atualizado com sucesso!");
+  mostrarDia(dataCompleta);
+  showDashboard();
+};
+
   // total que falta somando todos os documentos
   const totalFaltando = docs.reduce((acc, doc) => {
     const v = doc.data();
