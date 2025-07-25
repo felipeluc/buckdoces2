@@ -1,4 +1,3 @@
-// Parte 1 - Firebase e Login
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore,
@@ -130,7 +129,6 @@ function obterProdutosSelecionados() {
     })
     .filter(Boolean);
 }
-
 window.cadastrar = async (usuario) => {
   const cliente = document.getElementById("cliente").value.trim();
   const telefone = document.getElementById("telefone").value.trim();
@@ -178,6 +176,7 @@ window.cadastrar = async (usuario) => {
 
   alert("Venda salva!");
 };
+
 window.enviarComprovante = () => {
   const numero = document.getElementById("telefone")?.value.trim();
   const valor = document.getElementById("valor")?.value.trim();
@@ -193,7 +192,7 @@ window.enviarComprovante = () => {
 
   const listaProdutos = produtosSelecionados.map(p => `- ${p}`).join("\n");
 
-  const mensagem = `Olá ${cliente}!\n\nSegue o comprovante da sua compra na Ana Buck Doces:\n\nProdutos:\n${listaProdutos}\n\nValor: R$ ${valor}\nStatus: ${status.toUpperCase()}${status !== "pago" ? `\nPagamento para: ${dataReceber}` : ""}\n\nCHAVE PIX (CNPJ): 57.010.512/0001-56\nPor favor, envie o comprovante após o pagamento. 😊\n\nAgradecemos pela preferência!`;
+  const mensagem = `Olá ${cliente}!\n\nSegue o comprovante da sua compra na Ana Buck Doces:\n\nProdutos:\n${listaProdutos}\n\nValor: R$ ${valor}\nStatus: ${status.toUpperCase()}${status !== "pago" ? `\nPagamento para: ${dataReceber}` : ""}\n\nAgradecemos pela preferência! 😊`;
 
   const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
   window.open(link, "_blank");
@@ -209,7 +208,7 @@ window.showDashboard = async () => {
 
   const aReceber = vendas
     .filter(v => v.status !== "pago")
-    .reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
+    .reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || parseFloat(v.valor) || 0), 0);
 
   let html = `
     <h2>Dashboard</h2>
@@ -220,6 +219,7 @@ window.showDashboard = async () => {
 
   document.getElementById("conteudo").innerHTML = html;
 };
+
 window.showCobranca = async () => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -252,12 +252,7 @@ window.showCobranca = async () => {
     const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
       const diaStr = String(i + 1).padStart(2, "0");
       const vendasDoDia = diasDoMes[diaStr] || [];
-      const totalDia = vendasDoDia.reduce((acc, v) => {
-        const falta = parseFloat(v.faltaReceber);
-        const valor = parseFloat(v.valor);
-        return acc + (falta > 0 ? falta : valor);
-      }, 0);
-
+      const totalDia = vendasDoDia.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || parseFloat(v.valor) || 0), 0);
       const valorHtml = totalDia > 0 ? `<div class="calendar-day-value">R$ ${totalDia.toFixed(2)}</div>` : "";
       return `
         <div class="calendar-day" onclick="mostrarDia('${mes}-${diaStr}')">
@@ -288,6 +283,7 @@ window.mostrarDia = (dataCompleta) => {
 
   const cards = Object.entries(grupos).map(([telefone, vendas]) => {
     const nome = vendas[0].cliente;
+
     const total = vendas.reduce((acc, v) => {
       const falta = parseFloat(v.faltaReceber);
       const valor = parseFloat(v.valor);
@@ -417,6 +413,7 @@ window.confirmarParcial = async (telefone, dataCompleta) => {
   mostrarDia(dataCompleta);
   showDashboard();
 };
+
 window.reagendarGrupo = (telefone, dataCompleta) => {
   const div = document.getElementById(`reagendar-${telefone}`);
   div.innerHTML = `
@@ -444,3 +441,8 @@ window.confirmarReagendar = async (telefone, dataCompleta) => {
   alert("Data reagendada com sucesso!");
   mostrarDia(dataCompleta);
 };
+function formatarData(data) {
+  if (!data) return "-";
+  const [ano, mes, dia] = data.split("-");
+  return `${dia}-${mes}-${ano}`;
+}
