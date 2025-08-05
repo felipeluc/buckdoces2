@@ -264,24 +264,29 @@ Obrigada pela preferência!`;
   window.open(link, "_blank");
 };
 
-// === DASHBOARD ===
+// === DASHBOARD ATUALIZADO ===
 window.showDashboard = async () => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  const hoje = new Date().toISOString().split("T")[0];
 
-  // Vendas do dia
-  const hojeVendas = vendas.filter(v => v.data === hoje);
+  const hoje = new Date();
+  const anoAtual = hoje.getFullYear();
+  const mesAtual = hoje.getMonth() + 1;
+
+  const mesOptions = Array.from({ length: 12 }, (_, i) => {
+    const mesNum = i + 1;
+    const mesLabel = new Date(0, mesNum - 1).toLocaleString("pt-BR", { month: "long" });
+    return `<option value="${mesNum}" ${mesNum === mesAtual ? "selected" : ""}>${mesLabel}</option>`;
+  }).join("");
+
+  const hojeStr = hoje.toISOString().split("T")[0];
+  const hojeVendas = vendas.filter(v => v.data === hojeStr);
   const totalHoje = hojeVendas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
-
-  // Valor a receber de todas vendas não pagas (status != pago)
-  const aReceber = vendas
-    .filter(v => v.status !== "pago")
+  const aReceber = vendas.filter(v => v.status !== "pago")
     .reduce((acc, v) => acc + ((parseFloat(v.faltaReceber) > 0) ? parseFloat(v.faltaReceber) : 0), 0);
 
   document.getElementById("conteudo").innerHTML = `
     <h2>Dashboard</h2>
-
     <section style="margin-bottom:20px;">
       <h3>Vendas hoje: ${hojeVendas.length}</h3>
       <p>Total vendido hoje: ${totalHoje.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
@@ -290,12 +295,22 @@ window.showDashboard = async () => {
 
     <section>
       <h3>📆 Vendas por Dia</h3>
-      <div class="calendar" id="dashboardCalendar"></div>
+      <label for="mesSelecionado">Selecionar Mês:</label>
+      <select id="mesSelecionado">${mesOptions}</select>
+      <div class="calendar" id="dashboardCalendar" style="display: flex; flex-wrap: wrap;"></div>
       <div id="detalhesDiaDashboard"></div>
     </section>
   `;
 
-  // Monta o calendário (vendas agrupadas por data)
+  const selectMes = document.getElementById("mesSelecionado");
+  selectMes.addEventListener("change", () => {
+    gerarCalendario(vendas, parseInt(selectMes.value), anoAtual);
+  });
+
+  gerarCalendario(vendas, mesAtual, anoAtual);
+};
+
+function gerarCalendario(vendas, mes, ano) {
   const vendasPorData = {};
   vendas.forEach(v => {
     if (!v.data) return;
@@ -303,11 +318,14 @@ window.showDashboard = async () => {
     vendasPorData[v.data].push(v);
   });
 
-  const diasNoMes = 31;
+  const diasNoMes = new Date(ano, mes, 0).getDate();
+  const prefixoData = `${ano}-${String(mes).padStart(2, "0")}`;
   let calendarioHtml = "";
+
   for (let i = 1; i <= diasNoMes; i++) {
     const diaStr = String(i).padStart(2, "0");
-    const vendasDoDia = vendasPorData[`${hoje.slice(0, 8)}${diaStr}`] || [];
+    const dataCompleta = `${prefixoData}-${diaStr}`;
+    const vendasDoDia = vendasPorData[dataCompleta] || [];
 
     const totalDia = vendasDoDia.reduce((acc, v) => {
       const falta = parseFloat(v.faltaReceber) || 0;
@@ -316,102 +334,46 @@ window.showDashboard = async () => {
     }, 0);
 
     calendarioHtml += `
-      <div class="calendar-day" onclick="mostrarDiaDashboard('${hoje.slice(0, 8)}${diaStr}')" style="cursor:pointer; border:1px solid #ccc; margin: 2px; padding: 5px; border-radius: 5px; text-align:center;">
+      <div class="calendar-day" onclick="mostrarDiaDashboard('${dataCompleta}')" style="cursor:pointer; border:1px solid #ccc; margin: 4px; padding: 8px; border-radius: 6px; text-align:center; width: 60px;">
         <div style="font-weight:bold;">${diaStr}</div>
         <div style="color:#c06078; font-size: 0.9em;">${totalDia > 0 ? totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : ""}</div>
       </div>
     `;
   }
   document.getElementById("dashboardCalendar").innerHTML = calendarioHtml;
+}
 
-  // Evento filtro local removido daqui, está no menu separado agora.
-};
-
-// === MOSTRAR VENDAS DO DIA NO DASHBOARD (COM DATA DE PAGAMENTO) ===
-window.mostrarDiaDashboard = (dataCompleta) => {
-  getDocs(collection(db, "vendas")).then(snap => {
-    const todasVendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    const vendasDoDia = todasVendas.filter(v => v.data === dataCompleta);
-
-    if (!vendasDoDia.length) {
-      document.getElementById("detalhesDiaDashboard").innerHTML = "<p>Sem vendas neste dia.</p>";
-      return;
-    }
-
-    // Agrupa por telefone
-    const grupos = {};
-    vendasDoDia.forEach(v => {
-      const tel = v.telefone || "sem-telefone";
-      if (!grupos[tel]) grupos[tel] = [];
-      grupos[tel].push(v);
-    });
-
-    const cards = Object.entries(grupos).map(([telefone, vendas]) => {
-      const nome = vendas[0].cliente;
-
-      const totalOriginal = vendas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
-      const totalPagoParcial = vendas.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
-      const totalFalta = vendas.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
-
-      const pagamentos = vendas.map(v => {
-        let dataPag = v.dataReceber || "Sem data";
-        return `<p><strong>${v.produtosVendidos.join(", ")}</strong><br> Valor: R$ ${parseFloat(v.valor).toFixed(2).replace(".", ",")} - Pagar até: ${dataPag} - Status: ${v.status}</p>`;
-      }).join("");
-
-      return `
-        <div class="card compra-info" style="border-left: 4px solid #c06078; margin-bottom: 15px; padding: 10px;">
-          <h3>${nome}</h3>
-          ${pagamentos}
-          <p><strong>Total vendido:</strong> R$ ${totalOriginal.toFixed(2).replace(".", ",")}</p>
-          <p><strong>Total pago parcial:</strong> R$ ${totalPagoParcial.toFixed(2).replace(".", ",")}</p>
-          <p><strong>Falta receber:</strong> R$ ${totalFalta.toFixed(2).replace(".", ",")}</p>
-          <p><strong>Telefone:</strong> ${telefone === "sem-telefone" ? "Não informado" : telefone}</p>
-        </div>
-      `;
-    }).join("");
-
-    document.getElementById("detalhesDiaDashboard").innerHTML = cards;
-  });
-};
-
-// === NOVA TELA FILTRO POR LOCAL ===
-window.showFiltroPorLocal = async () => {
+// === MOSTRAR VENDAS DO DIA ===
+window.mostrarDiaDashboard = async (dataCompleta) => {
   const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const todasVendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const vendasDoDia = todasVendas.filter(v => v.data === dataCompleta);
 
-  // Agrupar por local
-  const gruposLocal = {};
-  vendas.forEach(v => {
-    if (!v.local) return;
-    gruposLocal[v.local] = gruposLocal[v.local] || [];
-    gruposLocal[v.local].push(v);
-  });
-
-  let html = `<h2>Filtro por Local</h2>`;
-  for (const [local, vendasLocal] of Object.entries(gruposLocal)) {
-    html += `<section style="margin-bottom: 20px;">
-      <h3>${local} (${vendasLocal.length} vendas)</h3>
-    `;
-
-    vendasLocal.forEach(v => {
-      html += `
-      <div class="card" style="border-left: 4px solid #c06078; margin-bottom: 10px; padding: 10px;">
-        <p><strong>Cliente:</strong> ${v.cliente}</p>
-        <p><strong>Telefone:</strong> ${v.telefone || "Não informado"}</p>
-        <p><strong>Valor:</strong> R$ ${parseFloat(v.valor).toFixed(2).replace(".", ",")}</p>
-        <p><strong>Status:</strong> ${v.status}</p>
-        <p><strong>Produtos:</strong></p>
-        <ul style="margin-left: 15px;">
-          ${v.produtosVendidos ? v.produtosVendidos.map(p => `<li>${p}</li>`).join("") : "Nenhum"}
-        </ul>
-      </div>
-      `;
-    });
-
-    html += `</section>`;
+  if (!vendasDoDia.length) {
+    document.getElementById("detalhesDiaDashboard").innerHTML = "<p>Sem vendas neste dia.</p>";
+    return;
   }
 
-  document.getElementById("conteudo").innerHTML = html;
+  const cards = vendasDoDia.map(v => {
+    const produtos = v.produtosVendidos?.map(p => `<li>${p}</li>`).join("") || "Nenhum";
+    return `
+      <div class="card compra-info" style="border-left: 4px solid #c06078; margin-bottom: 15px; padding: 10px;">
+        <p><strong>Cliente:</strong> ${v.cliente}</p>
+        <p><strong>Telefone:</strong> ${v.telefone || "Não informado"}</p>
+        <p><strong>Local:</strong> ${v.local || "Não informado"}</p>
+        <p><strong>Valor:</strong> R$ ${parseFloat(v.valor).toFixed(2).replace(".", ",")}</p>
+        <p><strong>Status:</strong> ${v.status}</p>
+        <p><strong>Forma:</strong> ${v.forma || "Não informado"}</p>
+        ${v.status !== "pago" ? `<p><strong>Data Receber:</strong> ${v.dataReceber || "Não informada"}</p>` : ""}
+        ${v.status === "parcial" ? `<p><strong>Valor Parcial:</strong> R$ ${parseFloat(v.valorParcial).toFixed(2).replace(".", ",")}</p>` : ""}
+        ${v.status !== "pago" ? `<p><strong>Falta Receber:</strong> R$ ${parseFloat(v.faltaReceber).toFixed(2).replace(".", ",")}</p>` : ""}
+        <p><strong>Produtos Vendidos:</strong></p>
+        <ul>${produtos}</ul>
+      </div>
+    `;
+  }).join("");
+
+  document.getElementById("detalhesDiaDashboard").innerHTML = cards;
 };
 
 // === TELA DE COBRANÇA (ATUALIZADA) ===
