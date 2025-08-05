@@ -59,6 +59,8 @@ function showTabs(user) {
       <button onclick="showCadastro('${user}')">Cadastrar Venda</button>
       <button onclick="showDashboard()">Dashboard</button>
       <button onclick="showCobranca()">Cobrança</button>
+      <button onclick="showCalendarioVendas()">📆 Vendas por Dia</button>
+      <button onclick="showFiltroLocal()">📍 Filtrar por Local</button>
     </div>
     <div id="conteudo" class="card"></div>
   `;
@@ -177,7 +179,7 @@ window.cadastrar = async (usuario) => {
   const data = new Date().toISOString().split("T")[0];
   const produtosSelecionados = obterProdutosSelecionados();
 
-  // Limpa telefone para ficar só números
+  // Limpa telefone para manter apenas números
   telefone = telefone.replace(/\D/g, "");
 
   if (!cliente || !telefone || !local || isNaN(valor) || produtosSelecionados.length === 0) {
@@ -206,7 +208,13 @@ window.cadastrar = async (usuario) => {
 
   // === SALVA NO FIREBASE ===
   await addDoc(collection(db, "vendas"), {
-    usuario, cliente, telefone, local, valor, status, forma,
+    usuario,
+    cliente,
+    telefone,
+    local,
+    valor,
+    status,
+    forma,
     valorParcial: status === "parcial" ? valorParcial : 0,
     faltaReceber: status === "parcial" ? faltaReceber : (status === "nao" ? valor : 0),
     dataReceber: status !== "pago" ? dataReceber : null,
@@ -214,9 +222,8 @@ window.cadastrar = async (usuario) => {
     produtosVendidos: produtosSelecionados
   });
 
-  alert("Venda salva!");
+  alert("Venda salva com sucesso!");
 };
-
 // === ENVIAR COMPROVANTE VIA WHATSAPP ===
 window.enviarComprovante = () => {
   let numero = document.getElementById("telefone")?.value.trim();
@@ -231,7 +238,7 @@ window.enviarComprovante = () => {
     return;
   }
 
-  // Limpa número para ficar só dígitos
+  // Limpa número para manter apenas dígitos
   numero = numero.replace(/\D/g, "");
 
   // Adiciona prefixo 55 automaticamente se não tiver
@@ -239,7 +246,7 @@ window.enviarComprovante = () => {
     numero = "55" + numero;
   }
 
-  // Remove o símbolo R$ se houver e ajusta ponto/vírgula
+  // Ajusta valor para número com ponto (.)
   const valor = parseFloat(valorCampo.replace("R$ ", "").replace(".", "").replace(",", ".")).toFixed(2);
   const listaProdutos = produtosSelecionados.map(p => `- ${p}`).join("\n");
 
@@ -261,10 +268,10 @@ Obrigada pela preferência!`;
   const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
   window.open(link, "_blank");
 };
-// === DASHBOARD ===
+// === DASHBOARD MELHORADO ===
 window.showDashboard = async () => {
   const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(doc => doc.data());
+  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   const hoje = new Date().toISOString().split("T")[0];
 
   const hojeVendas = vendas.filter(v => v.data === hoje);
@@ -274,23 +281,187 @@ window.showDashboard = async () => {
     .filter(v => v.status !== "pago")
     .reduce((acc, v) => acc + ((parseFloat(v.faltaReceber) > 0) ? parseFloat(v.faltaReceber) : 0), 0);
 
+  const locaisUnicos = [...new Set(vendas.map(v => v.local).filter(Boolean))];
+
   document.getElementById("conteudo").innerHTML = `
     <h2>Dashboard</h2>
-    <p>Vendas hoje: ${hojeVendas.length}</p>
-    <p>Total vendido hoje: ${totalHoje.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-    <p>Valor a receber: ${aReceber.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+    <p><strong>Vendas hoje:</strong> ${hojeVendas.length}</p>
+    <p><strong>Total vendido hoje:</strong> ${totalHoje.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+    <p><strong>Valor a receber:</strong> ${aReceber.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+
+    <hr>
+
+    <h3>🗓 Vendas por Dia</h3>
+    <input type="month" id="filtroMesDashboard" />
+    <div id="calendarioDashboard"></div>
+    <div id="detalhesDashboard"></div>
+
+    <hr>
+
+    <h3>📍 Filtro por Local</h3>
+    <select id="filtroLocal">
+      <option value="">Selecione o local</option>
+      ${locaisUnicos.map(loc => `<option value="${loc}">${loc}</option>`).join("")}
+    </select>
+    <div id="clientesLocal"></div>
+    <div id="detalhesClienteLocal"></div>
   `;
+
+  // === Calendário de vendas por dia ===
+  document.getElementById("filtroMesDashboard").addEventListener("change", e => {
+    const mes = e.target.value;
+    const diasDoMes = {};
+    vendas.forEach(v => {
+      if (v.data?.startsWith(mes)) {
+        const dia = v.data.split("-")[2];
+        if (!diasDoMes[dia]) diasDoMes[dia] = [];
+        diasDoMes[dia].push(v);
+      }
+    });
+
+    const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
+      const diaStr = String(i + 1).padStart(2, "0");
+      const vendasDoDia = diasDoMes[diaStr] || [];
+
+      const totalDia = vendasDoDia.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
+
+      const valorHtml = totalDia > 0 ? `<div class="calendar-day-value">${totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>` : "";
+      return `
+        <div class="calendar-day" onclick="mostrarDiaDashboard('${mes}-${diaStr}')">
+          <div>${diaStr}</div>
+          ${valorHtml}
+        </div>`;
+    }).join("");
+
+    document.getElementById("calendarioDashboard").innerHTML = `<div class="calendar">${calendarioHtml}</div>`;
+  });
+
+  // === Filtro por local ===
+  document.getElementById("filtroLocal").addEventListener("change", e => {
+    const localSelecionado = e.target.value;
+    if (!localSelecionado) return;
+
+    const porCliente = {};
+    vendas.filter(v => v.local === localSelecionado).forEach(v => {
+      const tel = v.telefone;
+      if (!porCliente[tel]) porCliente[tel] = [];
+      porCliente[tel].push(v);
+    });
+
+    const listaClientes = Object.entries(porCliente).map(([tel, compras]) => {
+      const nome = compras[0].cliente || "Cliente";
+      return `<div class="card" onclick="mostrarClienteDashboard('${tel}')"><strong>${nome}</strong> - ${tel}</div>`;
+    }).join("");
+
+    document.getElementById("clientesLocal").innerHTML = listaClientes;
+  });
+
+  // Armazena para reutilizar localmente
+  localStorage.setItem("vendasDashboard", JSON.stringify(vendas));
 };
 
-// === COBRANÇA (INÍCIO) ===
+// === Mostrar dia clicado no calendário do Dashboard ===
+window.mostrarDiaDashboard = (dataCompleta) => {
+  const todasVendas = JSON.parse(localStorage.getItem("vendasDashboard"));
+  const vendasDoDia = todasVendas.filter(v => v.data === dataCompleta);
+
+  if (!vendasDoDia.length) {
+    document.getElementById("detalhesDashboard").innerHTML = "<p>Sem vendas neste dia.</p>";
+    return;
+  }
+
+  const grupos = {};
+  vendasDoDia.forEach(v => {
+    const tel = v.telefone || "sem-telefone";
+    if (!grupos[tel]) grupos[tel] = [];
+    grupos[tel].push(v);
+  });
+
+  const cards = Object.entries(grupos).map(([telefone, vendas]) => {
+    const nome = vendas[0].cliente;
+    const compras = vendas.map(v => {
+      const produtos = (v.produtosVendidos || []).map(p => `<li>${p}</li>`).join("");
+      return `
+        <div>
+          <p><strong>Data:</strong> ${formatarData(v.data)}</p>
+          <p><strong>Local:</strong> ${v.local}</p>
+          <p><strong>Valor:</strong> R$ ${parseFloat(v.valor).toFixed(2)}</p>
+          <p><strong>Status:</strong> ${v.status}</p>
+          <ul>${produtos}</ul>
+        </div>
+      `;
+    }).join("<hr>");
+
+    return `<div class="card"><h3>${nome} - ${telefone}</h3>${compras}</div>`;
+  }).join("");
+
+  document.getElementById("detalhesDashboard").innerHTML = `<h3>${formatarData(dataCompleta)}</h3>${cards}`;
+};
+
+// === Mostrar cliente filtrado por local ===
+window.mostrarClienteDashboard = (telefone) => {
+  const todasVendas = JSON.parse(localStorage.getItem("vendasDashboard"));
+  const compras = todasVendas.filter(v => v.telefone === telefone);
+
+  if (!compras.length) {
+    document.getElementById("detalhesClienteLocal").innerHTML = "<p>Nenhuma compra encontrada.</p>";
+    return;
+  }
+
+  const nome = compras[0].cliente;
+  const listaCompras = compras.map(v => {
+    const produtos = (v.produtosVendidos || []).map(p => `<li>${p}</li>`).join("");
+    return `
+      <div class="card">
+        <p><strong>Data:</strong> ${formatarData(v.data)}</p>
+        <p><strong>Local:</strong> ${v.local}</p>
+        <p><strong>Valor:</strong> R$ ${parseFloat(v.valor).toFixed(2)}</p>
+        <p><strong>Status:</strong> ${v.status}</p>
+        <p><strong>Forma:</strong> ${v.forma || "-"}</p>
+        <p><strong>Data de pagamento:</strong> ${formatarData(v.dataReceber) || "-"}</p>
+        <p><strong>Produtos:</strong></p><ul>${produtos}</ul>
+        <button onclick="reenviarComprovante('${v.telefone}', '${v.cliente}', ${v.valor}, '${v.status}', '${v.dataReceber}', ${JSON.stringify(v.produtosVendidos)})">Reenviar Comprovante</button>
+        <button onclick="marcarPagoGrupo('${telefone}', '${v.dataReceber}')">Pago</button>
+        <button onclick="cobrarWhats('${telefone}', '${v.dataReceber}')">Cobrar no WhatsApp</button>
+      </div>
+    `;
+  }).join("");
+
+  document.getElementById("detalhesClienteLocal").innerHTML = `<h3>${nome} - ${telefone}</h3>${listaCompras}`;
+};
+
+// === Reenvio de comprovante com base no cliente ===
+window.reenviarComprovante = (telefone, cliente, valor, status, dataReceber, produtosVendidos) => {
+  let numero = telefone.replace(/\D/g, "");
+  if (!numero.startsWith("55")) numero = "55" + numero;
+  const listaProdutos = (produtosVendidos || []).map(p => `- ${p}`).join("\n");
+  const mensagem = `Olá ${cliente}!  
+
+Segue o comprovante da sua compra na Ana Buck Doces:
+
+Produtos:
+${listaProdutos}
+
+Valor: R$ ${parseFloat(valor).toFixed(2)}
+Status: ${status.toUpperCase()}${status !== "pago" ? `\nPagamento para: ${formatarData(dataReceber)}` : ""}
+
+💳 CHAVE PIX (CNPJ): 57.010.512/0001-56  
+📩 Por favor, envie o comprovante após o pagamento.
+
+Obrigada pela preferência!`;
+
+  const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
+  window.open(link, "_blank");
+};
+// === TELA DE COBRANÇA (ATUALIZADA) ===
 window.showCobranca = async () => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-  // Pega apenas as que ainda não estão pagas
+  // Filtra vendas pendentes (status diferente de pago e com dataReceber válida)
   const pendentes = vendas.filter(v => v.status !== "pago" && v.dataReceber);
 
-  // Salva localmente para exibir nos cards depois
+  // Salva localmente para reutilização
   localStorage.setItem("vendas", JSON.stringify(vendas));
 
   document.getElementById("conteudo").innerHTML = `
@@ -300,11 +471,16 @@ window.showCobranca = async () => {
     <div id="detalhesDia"></div>
   `;
 
-  // Filtro do mês
+  // Evento para filtro por mês
   document.getElementById("mesFiltro").addEventListener("change", e => {
     const mes = e.target.value;
-    if (!mes) return;
+    if (!mes) {
+      document.getElementById("calendario").innerHTML = "";
+      document.getElementById("detalhesDia").innerHTML = "";
+      return;
+    }
 
+    // Agrupa vendas pendentes por dia do mês selecionado
     const diasDoMes = {};
     pendentes.forEach(v => {
       if (v.dataReceber?.startsWith(mes)) {
@@ -314,19 +490,20 @@ window.showCobranca = async () => {
       }
     });
 
-    // Monta o calendário com valores do dia
+    // Cria calendário com valores diários (soma dos valores a receber)
     const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
       const diaStr = String(i + 1).padStart(2, "0");
       const vendasDoDia = diasDoMes[diaStr] || [];
 
-      // Se faltaReceber > 0, considera faltaReceber, caso contrário o valor original
       const totalDia = vendasDoDia.reduce((acc, v) => {
         const falta = parseFloat(v.faltaReceber) || 0;
-        const valor = parseFloat(v.valor) || 0;
-        return acc + (falta > 0 ? falta : valor);
+        return acc + (falta > 0 ? falta : parseFloat(v.valor) || 0);
       }, 0);
 
-      const valorHtml = totalDia > 0 ? `<div class="calendar-day-value">${totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>` : "";
+      const valorHtml = totalDia > 0
+        ? `<div class="calendar-day-value">${totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>`
+        : "";
+
       return `
         <div class="calendar-day" onclick="mostrarDia('${mes}-${diaStr}')">
           <div>${diaStr}</div>
@@ -335,20 +512,22 @@ window.showCobranca = async () => {
     }).join("");
 
     document.getElementById("calendario").innerHTML = `<div class="calendar">${calendarioHtml}</div>`;
+    document.getElementById("detalhesDia").innerHTML = "";
   });
 };
-// === MOSTRAR COBRANÇAS DE UM DIA ===
+
+// === EXIBE DETALHES DAS COBRANÇAS DE UM DIA ===
 window.mostrarDia = (dataCompleta) => {
   const snap = localStorage.getItem("vendas");
   const todasVendas = JSON.parse(snap);
-  const vendasDoDia = todasVendas.filter(v => v.dataReceber === dataCompleta);
+  const vendasDoDia = todasVendas.filter(v => v.dataReceber === dataCompleta && v.status !== "pago");
 
   if (!vendasDoDia.length) {
     document.getElementById("detalhesDia").innerHTML = "<p>Sem cobranças neste dia.</p>";
     return;
   }
 
-  // Agrupa vendas por telefone (um card por cliente)
+  // Agrupa por telefone (cliente)
   const grupos = {};
   vendasDoDia.forEach(v => {
     const tel = v.telefone || "sem-telefone";
@@ -356,26 +535,17 @@ window.mostrarDia = (dataCompleta) => {
     grupos[tel].push(v);
   });
 
-  // Monta os cards de cada cliente
+  // Monta os cards para cada cliente
   const cards = Object.entries(grupos).map(([telefone, vendas]) => {
     const nome = vendas[0].cliente;
 
-    // Total da compra é sempre a soma original dos valores
     const totalOriginal = vendas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
-
-    // Total pago parcial é a soma de todos os pagamentos já recebidos
     const totalPagoParcial = vendas.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
-
-    // Falta pagar é calculado com base no que ainda não foi quitado
-    const faltaPagar = vendas.reduce((acc, v) => {
-      const falta = parseFloat(v.faltaReceber) || 0;
-      return acc + falta;
-    }, 0);
+    const faltaPagar = vendas.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
 
     const status = vendas.every(v => v.status === "pago") ? "✅ Pago" : "🔔 Pendência";
 
-    // Lista de compras
-    const compras = vendas.map(v => {
+    const comprasHtml = vendas.map(v => {
       const produtosFormatado = (v.produtosVendidos || []).map(p => `<div>${p}</div>`).join("");
       return `
         <div class="compra-info">
@@ -390,7 +560,6 @@ window.mostrarDia = (dataCompleta) => {
       `;
     }).join("<hr>");
 
-    // Monta o card final
     return `
       <div class="card">
         <h3>${nome} - ${telefone}</h3>
@@ -398,7 +567,7 @@ window.mostrarDia = (dataCompleta) => {
         <p><strong>Total da compra:</strong> ${totalOriginal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
         <p><strong>Pago parcial:</strong> ${totalPagoParcial.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
         <p><strong>Falta pagar:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-        ${compras}
+        ${comprasHtml}
         <button onclick="marcarPagoGrupo('${telefone}', '${dataCompleta}')">Pago</button>
         <button onclick="marcarParcialGrupo('${telefone}', '${dataCompleta}')">Pago Parcial</button>
         <button onclick="cobrarWhats('${telefone}', '${dataCompleta}')">Cobrar no WhatsApp</button>
@@ -411,7 +580,6 @@ window.mostrarDia = (dataCompleta) => {
 
   document.getElementById("detalhesDia").innerHTML = `<h3>${formatarData(dataCompleta)}</h3>${cards}`;
 };
-
 // === MARCAR TODO O GRUPO COMO PAGO ===
 window.marcarPagoGrupo = async (telefone, dataCompleta) => {
   const snap = await getDocs(collection(db, "vendas"));
@@ -425,7 +593,7 @@ window.marcarPagoGrupo = async (telefone, dataCompleta) => {
     await updateDoc(doc(db, "vendas", docRef.id), {
       status: "pago",
       faltaReceber: 0,
-      valorParcial: v.valor,
+      valorParcial: v.valor, // marca como pago total
       dataReceber: null
     });
   }
@@ -435,7 +603,7 @@ window.marcarPagoGrupo = async (telefone, dataCompleta) => {
   showDashboard();
 };
 
-// === FORM DE PAGO PARCIAL ===
+// === FORM DE PAGO PARCIAL PARA GRUPO ===
 window.marcarParcialGrupo = (telefone, dataCompleta) => {
   const div = document.getElementById(`parcial-${telefone}`);
   div.innerHTML = `
@@ -497,7 +665,7 @@ window.confirmarParcial = async (telefone, dataCompleta) => {
   showDashboard();
 };
 
-// === FORM DE REAGENDAR COBRANÇA ===
+// === FORM DE REAGENDAR COBRANÇA PARA GRUPO ===
 window.reagendarGrupo = (telefone, dataCompleta) => {
   const div = document.getElementById(`reagendar-${telefone}`);
   div.innerHTML = `
@@ -526,7 +694,6 @@ window.confirmarReagendar = async (telefone, dataCompleta) => {
   alert("Cobrança reagendada para o grupo inteiro!");
   mostrarDia(novaData);
 };
-
 // === MENSAGEM DE COBRANÇA PARA WHATSAPP (DETALHADA E COM PIX) ===
 window.cobrarWhats = (telefone, dataCompleta) => {
   const snap = JSON.parse(localStorage.getItem("vendas"));
@@ -570,7 +737,6 @@ window.cobrarWhats = (telefone, dataCompleta) => {
   const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
   window.open(link, "_blank");
 };
-
 // === FUNÇÃO PARA FORMATAR DATAS NO FORMATO DD-MM-AAAA ===
 function formatarData(data) {
   if (!data) return "-";
