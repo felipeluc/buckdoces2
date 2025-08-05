@@ -59,8 +59,6 @@ function showTabs(user) {
       <button onclick="showCadastro('${user}')">Cadastrar Venda</button>
       <button onclick="showDashboard()">Dashboard</button>
       <button onclick="showCobranca()">Cobrança</button>
-      <button onclick="showCalendarioVendas()">📆 Vendas por Dia</button>
-      <button onclick="showFiltroLocal()">📍 Filtrar por Local</button>
     </div>
     <div id="conteudo" class="card"></div>
   `;
