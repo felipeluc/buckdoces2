@@ -51,7 +51,6 @@ window.login = () => {
     alert("Senha incorreta");
   }
 };
-
 // === MENU PRINCIPAL ===
 function showTabs(user) {
   document.getElementById("main").innerHTML = `
@@ -63,6 +62,7 @@ function showTabs(user) {
     <div id="conteudo" class="card"></div>
   `;
 }
+
 // === LISTA DE PRODUTOS ===
 const produtosLista = [
   "Cone", "Trufa", "Bolo de pote", "Pão de mel",
@@ -144,7 +144,6 @@ window.showCadastro = (usuario) => {
     document.getElementById("extras").innerHTML = html;
   });
 };
-
 // === ALTERAR QUANTIDADE DE PRODUTO ===
 window.alterarQuantidade = (index, delta) => {
   const span = document.getElementById(`quantidade-${index}`);
@@ -162,6 +161,7 @@ function obterProdutosSelecionados() {
     })
     .filter(Boolean);
 }
+
 // === CADASTRAR VENDA ===
 window.cadastrar = async (usuario) => {
   const cliente = document.getElementById("cliente").value.trim();
@@ -177,7 +177,7 @@ window.cadastrar = async (usuario) => {
   const data = new Date().toISOString().split("T")[0];
   const produtosSelecionados = obterProdutosSelecionados();
 
-  // Limpa telefone para manter apenas números
+  // Limpa telefone para ficar só números, remove espaços e caracteres estranhos
   telefone = telefone.replace(/\D/g, "");
 
   if (!cliente || !telefone || !local || isNaN(valor) || produtosSelecionados.length === 0) {
@@ -206,13 +206,7 @@ window.cadastrar = async (usuario) => {
 
   // === SALVA NO FIREBASE ===
   await addDoc(collection(db, "vendas"), {
-    usuario,
-    cliente,
-    telefone,
-    local,
-    valor,
-    status,
-    forma,
+    usuario, cliente, telefone, local, valor, status, forma,
     valorParcial: status === "parcial" ? valorParcial : 0,
     faltaReceber: status === "parcial" ? faltaReceber : (status === "nao" ? valor : 0),
     dataReceber: status !== "pago" ? dataReceber : null,
@@ -220,8 +214,9 @@ window.cadastrar = async (usuario) => {
     produtosVendidos: produtosSelecionados
   });
 
-  alert("Venda salva com sucesso!");
+  alert("Venda salva!");
 };
+
 // === ENVIAR COMPROVANTE VIA WHATSAPP ===
 window.enviarComprovante = () => {
   let numero = document.getElementById("telefone")?.value.trim();
@@ -236,7 +231,7 @@ window.enviarComprovante = () => {
     return;
   }
 
-  // Limpa número para manter apenas dígitos
+  // Limpa número para ficar só dígitos
   numero = numero.replace(/\D/g, "");
 
   // Adiciona prefixo 55 automaticamente se não tiver
@@ -244,7 +239,7 @@ window.enviarComprovante = () => {
     numero = "55" + numero;
   }
 
-  // Ajusta valor para número com ponto (.)
+  // Remove o símbolo R$ se houver e ajusta ponto/vírgula
   const valor = parseFloat(valorCampo.replace("R$ ", "").replace(".", "").replace(",", ".")).toFixed(2);
   const listaProdutos = produtosSelecionados.map(p => `- ${p}`).join("\n");
 
@@ -266,190 +261,248 @@ Obrigada pela preferência!`;
   const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
   window.open(link, "_blank");
 };
-// === DASHBOARD MELHORADO ===
+// === DASHBOARD ===
 window.showDashboard = async () => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   const hoje = new Date().toISOString().split("T")[0];
 
+  // Vendas do dia
   const hojeVendas = vendas.filter(v => v.data === hoje);
   const totalHoje = hojeVendas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
 
+  // Valor a receber de todas vendas não pagas (status != pago)
   const aReceber = vendas
     .filter(v => v.status !== "pago")
     .reduce((acc, v) => acc + ((parseFloat(v.faltaReceber) > 0) ? parseFloat(v.faltaReceber) : 0), 0);
 
+  // Locais únicos para filtro
   const locaisUnicos = [...new Set(vendas.map(v => v.local).filter(Boolean))];
 
   document.getElementById("conteudo").innerHTML = `
     <h2>Dashboard</h2>
-    <p><strong>Vendas hoje:</strong> ${hojeVendas.length}</p>
-    <p><strong>Total vendido hoje:</strong> ${totalHoje.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-    <p><strong>Valor a receber:</strong> ${aReceber.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
 
-    <hr>
+    <section>
+      <h3>Vendas hoje: ${hojeVendas.length}</h3>
+      <p>Total vendido hoje: ${totalHoje.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+      <p>Valor a receber: ${aReceber.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+    </section>
 
-    <h3>🗓 Vendas por Dia</h3>
-    <input type="month" id="filtroMesDashboard" />
-    <div id="calendarioDashboard"></div>
-    <div id="detalhesDashboard"></div>
+    <section>
+      <h3>📆 Vendas por Dia</h3>
+      <div class="calendar" id="dashboardCalendar"></div>
+      <div id="detalhesDiaDashboard"></div>
+    </section>
 
-    <hr>
-
-    <h3>📍 Filtro por Local</h3>
-    <select id="filtroLocal">
-      <option value="">Selecione o local</option>
-      ${locaisUnicos.map(loc => `<option value="${loc}">${loc}</option>`).join("")}
-    </select>
-    <div id="clientesLocal"></div>
-    <div id="detalhesClienteLocal"></div>
+    <section>
+      <h3>📍 Filtrar por Local</h3>
+      <select id="filtroLocalDashboard">
+        <option value="">Todos</option>
+        ${locaisUnicos.map(local => `<option value="${local}">${local}</option>`).join("")}
+      </select>
+      <div id="clientesPorLocal"></div>
+      <div id="detalhesClienteLocal"></div>
+    </section>
   `;
 
-  // === Calendário de vendas por dia ===
-  document.getElementById("filtroMesDashboard").addEventListener("change", e => {
-    const mes = e.target.value;
-    const diasDoMes = {};
-    vendas.forEach(v => {
-      if (v.data?.startsWith(mes)) {
-        const dia = v.data.split("-")[2];
-        if (!diasDoMes[dia]) diasDoMes[dia] = [];
-        diasDoMes[dia].push(v);
-      }
-    });
-
-    const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
-      const diaStr = String(i + 1).padStart(2, "0");
-      const vendasDoDia = diasDoMes[diaStr] || [];
-
-      const totalDia = vendasDoDia.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
-
-      const valorHtml = totalDia > 0 ? `<div class="calendar-day-value">${totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>` : "";
-      return `
-        <div class="calendar-day" onclick="mostrarDiaDashboard('${mes}-${diaStr}')">
-          <div>${diaStr}</div>
-          ${valorHtml}
-        </div>`;
-    }).join("");
-
-    document.getElementById("calendarioDashboard").innerHTML = `<div class="calendar">${calendarioHtml}</div>`;
+  // Monta o calendário (vendas agrupadas por data)
+  const vendasPorData = {};
+  vendas.forEach(v => {
+    if (!v.data) return;
+    vendasPorData[v.data] = vendasPorData[v.data] || [];
+    vendasPorData[v.data].push(v);
   });
 
-  // === Filtro por local ===
-  document.getElementById("filtroLocal").addEventListener("change", e => {
+  const diasNoMes = 31;
+  let calendarioHtml = "";
+  for (let i = 1; i <= diasNoMes; i++) {
+    const diaStr = String(i).padStart(2, "0");
+    const vendasDoDia = vendasPorData[`${hoje.slice(0, 8)}${diaStr}`] || [];
+
+    const totalDia = vendasDoDia.reduce((acc, v) => {
+      const falta = parseFloat(v.faltaReceber) || 0;
+      const valorBase = parseFloat(v.valor) || 0;
+      return acc + (falta > 0 ? falta : valorBase);
+    }, 0);
+
+    calendarioHtml += `
+      <div class="calendar-day" onclick="mostrarDiaDashboard('${hoje.slice(0, 8)}${diaStr}')">
+        <div>${diaStr}</div>
+        <div class="calendar-day-value">${totalDia > 0 ? totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : ""}</div>
+      </div>
+    `;
+  }
+  document.getElementById("dashboardCalendar").innerHTML = calendarioHtml;
+
+  // Evento filtro local
+  document.getElementById("filtroLocalDashboard").addEventListener("change", (e) => {
     const localSelecionado = e.target.value;
-    if (!localSelecionado) return;
-
-    const porCliente = {};
-    vendas.filter(v => v.local === localSelecionado).forEach(v => {
-      const tel = v.telefone;
-      if (!porCliente[tel]) porCliente[tel] = [];
-      porCliente[tel].push(v);
-    });
-
-    const listaClientes = Object.entries(porCliente).map(([tel, compras]) => {
-      const nome = compras[0].cliente || "Cliente";
-      return `<div class="card" onclick="mostrarClienteDashboard('${tel}')"><strong>${nome}</strong> - ${tel}</div>`;
-    }).join("");
-
-    document.getElementById("clientesLocal").innerHTML = listaClientes;
+    mostrarClientesPorLocal(localSelecionado, vendas);
   });
-
-  // Armazena para reutilizar localmente
-  localStorage.setItem("vendasDashboard", JSON.stringify(vendas));
 };
 
-// === Mostrar dia clicado no calendário do Dashboard ===
+// === MOSTRAR VENDAS DO DIA NO DASHBOARD (COM DATA DE PAGAMENTO) ===
 window.mostrarDiaDashboard = (dataCompleta) => {
-  const todasVendas = JSON.parse(localStorage.getItem("vendasDashboard"));
-  const vendasDoDia = todasVendas.filter(v => v.data === dataCompleta);
+  getDocs(collection(db, "vendas")).then(snap => {
+    const todasVendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const vendasDoDia = todasVendas.filter(v => v.data === dataCompleta);
 
-  if (!vendasDoDia.length) {
-    document.getElementById("detalhesDashboard").innerHTML = "<p>Sem vendas neste dia.</p>";
-    return;
-  }
+    if (!vendasDoDia.length) {
+      document.getElementById("detalhesDiaDashboard").innerHTML = "<p>Sem vendas neste dia.</p>";
+      return;
+    }
 
-  const grupos = {};
-  vendasDoDia.forEach(v => {
-    const tel = v.telefone || "sem-telefone";
-    if (!grupos[tel]) grupos[tel] = [];
-    grupos[tel].push(v);
-  });
+    // Agrupa por telefone
+    const grupos = {};
+    vendasDoDia.forEach(v => {
+      const tel = v.telefone || "sem-telefone";
+      if (!grupos[tel]) grupos[tel] = [];
+      grupos[tel].push(v);
+    });
 
-  const cards = Object.entries(grupos).map(([telefone, vendas]) => {
-    const nome = vendas[0].cliente;
-    const compras = vendas.map(v => {
-      const produtos = (v.produtosVendidos || []).map(p => `<li>${p}</li>`).join("");
+    const cards = Object.entries(grupos).map(([telefone, vendas]) => {
+      const nome = vendas[0].cliente;
+
+      const totalOriginal = vendas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
+      const totalPagoParcial = vendas.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
+      const totalFalta = vendas.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
+
+      const pagamentos = vendas.map(v => {
+        let dataPag = v.dataReceber || "Sem data";
+        return `<p><strong>${v.produtosVendidos.join(", ")}</strong><br> Valor: R$ ${parseFloat(v.valor).toFixed(2).replace(".", ",")} - Pagar até: ${dataPag} - Status: ${v.status}</p>`;
+      }).join("");
+
       return `
-        <div>
-          <p><strong>Data:</strong> ${formatarData(v.data)}</p>
-          <p><strong>Local:</strong> ${v.local}</p>
-          <p><strong>Valor:</strong> R$ ${parseFloat(v.valor).toFixed(2)}</p>
-          <p><strong>Status:</strong> ${v.status}</p>
-          <ul>${produtos}</ul>
+        <div class="card compra-info" style="border-left: 4px solid #c06078; margin-bottom: 15px;">
+          <h3>${nome}</h3>
+          ${pagamentos}
+          <p><strong>Total vendido:</strong> R$ ${totalOriginal.toFixed(2).replace(".", ",")}</p>
+          <p><strong>Total pago parcial:</strong> R$ ${totalPagoParcial.toFixed(2).replace(".", ",")}</p>
+          <p><strong>Falta pagar:</strong> R$ ${totalFalta.toFixed(2).replace(".", ",")}</p>
         </div>
       `;
-    }).join("<hr>");
+    }).join("");
 
-    return `<div class="card"><h3>${nome} - ${telefone}</h3>${compras}</div>`;
-  }).join("");
-
-  document.getElementById("detalhesDashboard").innerHTML = `<h3>${formatarData(dataCompleta)}</h3>${cards}`;
+    document.getElementById("detalhesDiaDashboard").innerHTML = cards;
+  });
 };
 
-// === Mostrar cliente filtrado por local ===
-window.mostrarClienteDashboard = (telefone) => {
-  const todasVendas = JSON.parse(localStorage.getItem("vendasDashboard"));
-  const compras = todasVendas.filter(v => v.telefone === telefone);
-
-  if (!compras.length) {
-    document.getElementById("detalhesClienteLocal").innerHTML = "<p>Nenhuma compra encontrada.</p>";
+// === MOSTRAR CLIENTES POR LOCAL (FILTRO) ===
+function mostrarClientesPorLocal(localSelecionado, todasVendas) {
+  if (!localSelecionado) {
+    document.getElementById("clientesPorLocal").innerHTML = "";
+    document.getElementById("detalhesClienteLocal").innerHTML = "";
     return;
   }
 
-  const nome = compras[0].cliente;
-  const listaCompras = compras.map(v => {
-    const produtos = (v.produtosVendidos || []).map(p => `<li>${p}</li>`).join("");
+  // Agrupa clientes únicos por telefone
+  const clientesMap = {};
+  todasVendas.forEach(v => {
+    if (v.local === localSelecionado && v.status !== "pago") {
+      clientesMap[v.telefone] = {
+        cliente: v.cliente,
+        telefone: v.telefone,
+        vendas: clientesMap[v.telefone]?.vendas || []
+      };
+      clientesMap[v.telefone].vendas.push(v);
+    }
+  });
+
+  const clientes = Object.values(clientesMap);
+
+  if (!clientes.length) {
+    document.getElementById("clientesPorLocal").innerHTML = "<p>Sem clientes para este local.</p>";
+    document.getElementById("detalhesClienteLocal").innerHTML = "";
+    return;
+  }
+
+  const listaClientesHtml = clientes.map(c => `
+    <p style="cursor:pointer; color:#c06078; font-weight:bold;" onclick="mostrarDetalhesClienteLocal('${c.telefone}')">
+      ${c.cliente}
+    </p>
+  `).join("");
+
+  document.getElementById("clientesPorLocal").innerHTML = listaClientesHtml;
+
+  // Armazena globalmente para acesso posterior no detalhe do cliente
+  window.clientesPorLocalMap = clientesMap;
+}
+
+// === MOSTRAR DETALHES DO CLIENTE SELECIONADO NO FILTRO POR LOCAL ===
+window.mostrarDetalhesClienteLocal = (telefone) => {
+  const clienteData = window.clientesPorLocalMap?.[telefone];
+  if (!clienteData) return;
+
+  const vendas = clienteData.vendas;
+
+  const cards = vendas.map(v => {
     return `
-      <div class="card">
-        <p><strong>Data:</strong> ${formatarData(v.data)}</p>
-        <p><strong>Local:</strong> ${v.local}</p>
-        <p><strong>Valor:</strong> R$ ${parseFloat(v.valor).toFixed(2)}</p>
+      <div class="card compra-info" style="border-left: 4px solid #a5405d; margin-bottom: 15px;">
+        <h3>${v.cliente}</h3>
+        <p><strong>Produtos:</strong> ${v.produtosVendidos.join(", ")}</p>
+        <p><strong>Valor:</strong> R$ ${parseFloat(v.valor).toFixed(2).replace(".", ",")}</p>
         <p><strong>Status:</strong> ${v.status}</p>
-        <p><strong>Forma:</strong> ${v.forma || "-"}</p>
-        <p><strong>Data de pagamento:</strong> ${formatarData(v.dataReceber) || "-"}</p>
-        <p><strong>Produtos:</strong></p><ul>${produtos}</ul>
-        <button onclick="reenviarComprovante('${v.telefone}', '${v.cliente}', ${v.valor}, '${v.status}', '${v.dataReceber}', ${JSON.stringify(v.produtosVendidos)})">Reenviar Comprovante</button>
-        <button onclick="marcarPagoGrupo('${telefone}', '${v.dataReceber}')">Pago</button>
-        <button onclick="cobrarWhats('${telefone}', '${v.dataReceber}')">Cobrar no WhatsApp</button>
+        <p><strong>Pagamento para:</strong> ${v.dataReceber || "Sem data"}</p>
+        <button onclick="reenviarComprovante('${v.id}')">Reenviar Comprovante</button>
+        <button onclick="marcarPago('${v.id}')">Pago</button>
       </div>
     `;
   }).join("");
 
-  document.getElementById("detalhesClienteLocal").innerHTML = `<h3>${nome} - ${telefone}</h3>${listaCompras}`;
+  document.getElementById("detalhesClienteLocal").innerHTML = cards;
 };
 
-// === Reenvio de comprovante com base no cliente ===
-window.reenviarComprovante = (telefone, cliente, valor, status, dataReceber, produtosVendidos) => {
-  let numero = telefone.replace(/\D/g, "");
+// === REENVIAR COMPROVANTE ===
+window.reenviarComprovante = async (idVenda) => {
+  const docRef = doc(db, "vendas", idVenda);
+  const docSnap = await getDocs(collection(db, "vendas"));
+  const vendaDoc = (await docRef.get()).data();
+
+  if (!vendaDoc) {
+    alert("Venda não encontrada.");
+    return;
+  }
+
+  const v = vendaDoc;
+
+  let numero = v.telefone || "";
   if (!numero.startsWith("55")) numero = "55" + numero;
-  const listaProdutos = (produtosVendidos || []).map(p => `- ${p}`).join("\n");
-  const mensagem = `Olá ${cliente}!  
+
+  const listaProdutos = v.produtosVendidos?.map(p => `- ${p}`).join("\n") || "";
+
+  const mensagem = `Olá ${v.cliente}!
 
 Segue o comprovante da sua compra na Ana Buck Doces:
 
 Produtos:
 ${listaProdutos}
 
-Valor: R$ ${parseFloat(valor).toFixed(2)}
-Status: ${status.toUpperCase()}${status !== "pago" ? `\nPagamento para: ${formatarData(dataReceber)}` : ""}
+Valor: R$ ${parseFloat(v.valor).toFixed(2).replace(".", ",")}
+Status: ${v.status.toUpperCase()}${v.status !== "pago" ? `\nPagamento para: ${v.dataReceber}` : ""}
 
-💳 CHAVE PIX (CNPJ): 57.010.512/0001-56  
+💳 CHAVE PIX (CNPJ): 57.010.512/0001-56
 📩 Por favor, envie o comprovante após o pagamento.
 
 Obrigada pela preferência!`;
 
   const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
   window.open(link, "_blank");
+};
+
+// === MARCAR COMO PAGO ===
+window.marcarPago = async (idVenda) => {
+  if (!confirm("Marcar esta venda como PAGO? Ela será removida do filtro local e cobrança.")) return;
+
+  const docRef = doc(db, "vendas", idVenda);
+  await updateDoc(docRef, {
+    status: "pago",
+    faltaReceber: 0,
+    valorParcial: 0,
+    dataReceber: null
+  });
+
+  alert("Venda marcada como PAGO.");
+  showDashboard();
 };
 // === TELA DE COBRANÇA (ATUALIZADA) ===
 window.showCobranca = async () => {
@@ -578,6 +631,7 @@ window.mostrarDia = (dataCompleta) => {
 
   document.getElementById("detalhesDia").innerHTML = `<h3>${formatarData(dataCompleta)}</h3>${cards}`;
 };
+
 // === MARCAR TODO O GRUPO COMO PAGO ===
 window.marcarPagoGrupo = async (telefone, dataCompleta) => {
   const snap = await getDocs(collection(db, "vendas"));
@@ -692,6 +746,7 @@ window.confirmarReagendar = async (telefone, dataCompleta) => {
   alert("Cobrança reagendada para o grupo inteiro!");
   mostrarDia(novaData);
 };
+
 // === MENSAGEM DE COBRANÇA PARA WHATSAPP (DETALHADA E COM PIX) ===
 window.cobrarWhats = (telefone, dataCompleta) => {
   const snap = JSON.parse(localStorage.getItem("vendas"));
@@ -735,6 +790,7 @@ window.cobrarWhats = (telefone, dataCompleta) => {
   const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
   window.open(link, "_blank");
 };
+
 // === FUNÇÃO PARA FORMATAR DATAS NO FORMATO DD-MM-AAAA ===
 function formatarData(data) {
   if (!data) return "-";
