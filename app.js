@@ -1,3 +1,148 @@
+// === CONFIGURAÇÃO FIREBASE ===
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  updateDoc,
+  doc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDGg5JtE_7gVRhTlRY30bpXsmMpvPEQ3tw",
+  authDomain: "buckdoces.firebaseapp.com",
+  projectId: "buckdoces",
+  storageBucket: "buckdoces.appspot.com",
+  messagingSenderId: "781727917443",
+  appId: "1:781727917443:web:c9709b3813d28ea60982b6"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+// === INTERFACE LOGIN ===
+document.getElementById("root").innerHTML = `
+  <h1 style="text-align: center; color: #d48c94">Buck Doces</h1>
+  <div class="card login-card">
+    <select id="user">
+      <option>Ana Buck</option>
+      <option>João Buck</option>
+    </select>
+    <input type="password" id="senha" placeholder="Senha" />
+    <button onclick="login()">Entrar</button>
+  </div>
+  <div id="main"></div>
+`;
+
+// === USUÁRIOS E SENHAS ===
+const senhas = {
+  "Ana Buck": "Ana1234",
+  "João Buck": "João1234"
+};
+
+// === LOGIN ===
+window.login = () => {
+  const usuario = document.getElementById("user").value;
+  const senha = document.getElementById("senha").value;
+  if (senhas[usuario] === senha) {
+    showTabs(usuario);
+  } else {
+    alert("Senha incorreta");
+  }
+};
+
+// === MENU PRINCIPAL ===
+function showTabs(user) {
+  document.getElementById("main").innerHTML = `
+    <div class="card">
+      <button onclick="showCadastro('${user}')">Cadastrar Venda</button>
+      <button onclick="showDashboard()">Dashboard</button>
+      <button onclick="showCobranca()">Cobrança</button>
+    </div>
+    <div id="conteudo" class="card"></div>
+  `;
+}
+// === LISTA DE PRODUTOS ===
+const produtosLista = [
+  "Cone", "Trufa", "Bolo de pote", "Pão de mel",
+  "Escondidinho de uva", "Bombom de uva", "BomBom de morango",
+  "Coxinha de morango", "Camafeu", "Caixinha", "Mousse", "Lanche natural",
+  "Maça do amor", "Kit cesta", "Kit caneca", "Morango do amor"
+];
+
+// === TELA DE CADASTRO (com suas melhorias solicitadas) ===
+window.showCadastro = (usuario) => {
+  const produtoOptions = produtosLista.map((produto, index) => `
+    <div style="display: flex; align-items: center; margin-bottom: 5px;">
+      <label style="flex: 1;">${produto}</label>
+      <button 
+        style="width:30px; height:30px; border-radius:4px; font-weight:bold;"
+        onclick="alterarQuantidade(${index}, -1)">-</button>
+      <span id="quantidade-${index}" style="margin: 0 5px; width: 20px; text-align: center; display: inline-block;">0</span>
+      <button 
+        style="width:30px; height:30px; border-radius:4px; font-weight:bold;"
+        onclick="alterarQuantidade(${index}, 1)">+</button>
+    </div>
+  `).join("");
+
+  document.getElementById("conteudo").innerHTML = `
+    <h2>Cadastro de Venda</h2>
+    <input id="cliente" placeholder="Nome do cliente" />
+    <input id="telefone" placeholder="Telefone (ex: 17991386966)" inputmode="numeric" pattern="[0-9]*" maxlength="11" />
+    <select id="local">
+      <option value="">Selecione o local</option>
+      <option value="Cemei">Cemei</option>
+      <option value="Analia Franco">Analia Franco</option>
+      <option value="Cemup">Cemup</option>
+    </select>
+    <input id="valor" placeholder="Valor (R$)" />
+    <div><strong>Produtos vendidos:</strong>${produtoOptions}</div>
+    <select id="status">
+      <option value="pago">Pago</option>
+      <option value="nao">Não pago</option>
+      <option value="parcial">Parcial</option>
+    </select>
+    <div id="extras"></div>
+    <button onclick="cadastrar('${usuario}')">Salvar</button>
+    <button onclick="enviarComprovante()">Enviar Comprovante via WhatsApp</button>
+  `;
+
+  // === FORMATAÇÃO DE MOEDA AUTOMÁTICA ===
+  const valorInput = document.getElementById("valor");
+  valorInput.addEventListener("input", () => {
+    let val = valorInput.value.replace(/\D/g, "");
+    val = (parseInt(val || "0") / 100).toFixed(2);
+    valorInput.value = `R$ ${val.replace(".", ",")}`;
+  });
+
+  // === FORMATAÇÃO TELEFONE: só números, limite 11 caracteres ===
+  const telInput = document.getElementById("telefone");
+  telInput.addEventListener("input", () => {
+    telInput.value = telInput.value.replace(/\D/g, "").slice(0, 11);
+  });
+
+  // === CAMPOS EXTRAS DINÂMICOS ===
+  document.getElementById("status").addEventListener("change", (e) => {
+    const val = e.target.value;
+    let html = "";
+    if (val === "pago") {
+      html = `<select id="forma"><option>dinheiro</option><option>cartão</option><option>pix</option></select>`;
+    } else if (val === "nao") {
+      html = `
+        <input type="date" id="dataReceber" />
+        <select id="forma"><option>dinheiro</option><option>cartão</option><option>pix</option></select>
+      `;
+    } else if (val === "parcial") {
+      html = `
+        <input type="number" id="valorParcial" placeholder="Valor recebido hoje" />
+        <input type="number" id="falta" placeholder="Valor que falta" />
+        <input type="date" id="dataReceber" />
+        <select id="forma"><option>dinheiro</option><option>cartão</option><option>pix</option></select>
+      `;
+    }
+    document.getElementById("extras").innerHTML = html;
+  });
+};
 // === ALTERAR QUANTIDADE DE PRODUTO ===
 window.alterarQuantidade = (index, delta) => {
   const span = document.getElementById(`quantidade-${index}`);
