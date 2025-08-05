@@ -423,13 +423,6 @@ window.mostrarDiaDashboard = async (dataCompleta) => {
   document.getElementById("detalhesDiaDashboard").innerHTML = cards;
 };
 
-// === FORMATAR DATA PARA DD-MM-AAAA ===
-function formatarData(data) {
-  if (!data) return "-";
-  const [ano, mes, dia] = data.split("-");
-  return `${dia}-${mes}-${ano}`;
-}
-
 // === TELA DE COBRANÇA (ATUALIZADA) ===
 window.showCobranca = async () => {
   const snap = await getDocs(collection(db, "vendas"));
