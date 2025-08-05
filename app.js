@@ -263,7 +263,7 @@ Obrigada pela preferência!`;
   window.open(link, "_blank");
 };
 
-// === DASHBOARD ATUALIZADO ===
+// === DASHBOARD ATUALIZADO COM CARDS BONITOS ===
 window.showDashboard = async () => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -287,15 +287,43 @@ window.showDashboard = async () => {
     .reduce((acc, v) => acc + ((parseFloat(v.faltaReceber) > 0) ? parseFloat(v.faltaReceber) : 0), 0);
 
   const valorRecebido = vendas.reduce((acc, v) => {
-    const recebido =
-      v.status === "pago"
-        ? parseFloat(v.valor) || 0
-        : (parseFloat(v.valorParcial) || 0);
+    const recebido = v.status === "pago"
+      ? parseFloat(v.valor) || 0
+      : (parseFloat(v.valorParcial) || 0);
     return acc + recebido;
   }, 0);
 
+  // === Top 5 Dias com mais valores para receber ===
+  const porDiaReceber = {};
+  vendas.forEach(v => {
+    if (!v.dataReceber || v.status === "pago") return;
+    const valor = parseFloat(v.faltaReceber) || 0;
+    porDiaReceber[v.dataReceber] = (porDiaReceber[v.dataReceber] || 0) + valor;
+  });
+
+  const topDias = Object.entries(porDiaReceber)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  // === Top 10 Pessoas que mais devem ===
+  const porPessoa = {};
+  vendas.forEach(v => {
+    if (v.status === "pago") return;
+    const tel = v.telefone || "sem-telefone";
+    const valor = parseFloat(v.faltaReceber) || 0;
+    if (!porPessoa[tel]) {
+      porPessoa[tel] = { nome: v.cliente || "Sem nome", total: 0 };
+    }
+    porPessoa[tel].total += valor;
+  });
+
+  const topPessoas = Object.entries(porPessoa)
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, 10);
+
   document.getElementById("conteudo").innerHTML = `
     <h2>Dashboard</h2>
+
     <section style="margin-bottom:20px;">
       <h3>Vendas hoje: ${hojeVendas.length}</h3>
       <p>Total vendido hoje: ${totalHoje.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
@@ -309,6 +337,31 @@ window.showDashboard = async () => {
       <select id="mesSelecionado">${mesOptions}</select>
       <div class="calendar" id="dashboardCalendar" style="display: flex; flex-wrap: wrap;"></div>
       <div id="detalhesDiaDashboard"></div>
+    </section>
+
+    <section style="margin-top:30px;">
+      <h3>📌 Dias com mais valores para receber (Top 5)</h3>
+      <div style="display: flex; flex-wrap: wrap; gap: 15px;">
+        ${topDias.map(([data, valor]) => `
+          <div class="card" style="flex:1; min-width: 220px; background: #fafafa; padding: 12px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+            <p><strong>📅 ${formatarData(data)}</strong></p>
+            <p>💰 ${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+          </div>
+        `).join("")}
+      </div>
+    </section>
+
+    <section style="margin-top:30px;">
+      <h3>📌 Pessoas que mais devem (Top 10)</h3>
+      <div style="display: flex; flex-wrap: wrap; gap: 15px;">
+        ${topPessoas.map(([tel, { nome, total }]) => `
+          <div class="card" style="flex:1; min-width: 220px; background: #fefefe; padding: 12px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+            <p><strong>👤 ${nome}</strong></p>
+            <p>📞 ${tel}</p>
+            <p>💰 ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+          </div>
+        `).join("")}
+      </div>
     </section>
   `;
 
