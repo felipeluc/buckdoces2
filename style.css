@@ -31,7 +31,6 @@ input, select, button {
   font-size: 16px;
   border-radius: 8px;
   border: 1px solid #e0a6b1;
-  box-sizing: border-box;
 }
 
 button {
@@ -60,8 +59,7 @@ button:hover {
   border-radius: 10px;
   text-align: center;
   cursor: pointer;
-  transition: transform 0.2s, background-color 0.2s;
-  user-select: none;
+  transition: transform 0.2s;
 }
 
 .calendar-day:hover {
@@ -101,23 +99,6 @@ strong {
   color: #a5405d;
 }
 
-/* Novos estilos para botões extras no cards */
-
-.card button {
-  background-color: #d4687c;
-  padding: 6px 10px;
-  margin-right: 8px;
-  font-size: 14px;
-  border-radius: 6px;
-  width: auto;
-  min-width: 80px;
-}
-
-.card button:hover {
-  background-color: #bb5a6b;
-}
-
-/* Responsivo para o calendário */
 @media screen and (max-width: 600px) {
   .calendar {
     grid-template-columns: repeat(4, 1fr);
