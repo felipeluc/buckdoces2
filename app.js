@@ -414,7 +414,6 @@ function formatarData(data) {
   const [ano, mes, dia] = data.split("-");
   return `${dia}/${mes}/${ano}`;
 }
-
 // === TELA DE COBRANÇA (ATUALIZADA) ===
 window.showCobranca = async () => {
   const snap = await getDocs(collection(db, "vendas"));
