@@ -51,15 +51,17 @@ window.login = () => {
     alert("Senha incorreta");
   }
 };
+
 // === MENU PRINCIPAL ===
 function showTabs(user) {
   document.getElementById("main").innerHTML = `
-    <div class="card">
+    <div class="card" style="display: flex; gap: 10px; flex-wrap: wrap;">
       <button onclick="showCadastro('${user}')">Cadastrar Venda</button>
       <button onclick="showDashboard()">Dashboard</button>
       <button onclick="showCobranca()">Cobrança</button>
+      <button onclick="showFiltroPorLocal()">Filtro por Local</button>
     </div>
-    <div id="conteudo" class="card"></div>
+    <div id="conteudo" class="card" style="margin-top: 15px;"></div>
   `;
 }
 
@@ -261,6 +263,7 @@ Obrigada pela preferência!`;
   const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
   window.open(link, "_blank");
 };
+
 // === DASHBOARD ===
 window.showDashboard = async () => {
   const snap = await getDocs(collection(db, "vendas"));
@@ -276,13 +279,10 @@ window.showDashboard = async () => {
     .filter(v => v.status !== "pago")
     .reduce((acc, v) => acc + ((parseFloat(v.faltaReceber) > 0) ? parseFloat(v.faltaReceber) : 0), 0);
 
-  // Locais únicos para filtro
-  const locaisUnicos = [...new Set(vendas.map(v => v.local).filter(Boolean))];
-
   document.getElementById("conteudo").innerHTML = `
     <h2>Dashboard</h2>
 
-    <section>
+    <section style="margin-bottom:20px;">
       <h3>Vendas hoje: ${hojeVendas.length}</h3>
       <p>Total vendido hoje: ${totalHoje.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
       <p>Valor a receber: ${aReceber.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
@@ -292,16 +292,6 @@ window.showDashboard = async () => {
       <h3>📆 Vendas por Dia</h3>
       <div class="calendar" id="dashboardCalendar"></div>
       <div id="detalhesDiaDashboard"></div>
-    </section>
-
-    <section>
-      <h3>📍 Filtrar por Local</h3>
-      <select id="filtroLocalDashboard">
-        <option value="">Todos</option>
-        ${locaisUnicos.map(local => `<option value="${local}">${local}</option>`).join("")}
-      </select>
-      <div id="clientesPorLocal"></div>
-      <div id="detalhesClienteLocal"></div>
     </section>
   `;
 
@@ -326,19 +316,15 @@ window.showDashboard = async () => {
     }, 0);
 
     calendarioHtml += `
-      <div class="calendar-day" onclick="mostrarDiaDashboard('${hoje.slice(0, 8)}${diaStr}')">
-        <div>${diaStr}</div>
-        <div class="calendar-day-value">${totalDia > 0 ? totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : ""}</div>
+      <div class="calendar-day" onclick="mostrarDiaDashboard('${hoje.slice(0, 8)}${diaStr}')" style="cursor:pointer; border:1px solid #ccc; margin: 2px; padding: 5px; border-radius: 5px; text-align:center;">
+        <div style="font-weight:bold;">${diaStr}</div>
+        <div style="color:#c06078; font-size: 0.9em;">${totalDia > 0 ? totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : ""}</div>
       </div>
     `;
   }
   document.getElementById("dashboardCalendar").innerHTML = calendarioHtml;
 
-  // Evento filtro local
-  document.getElementById("filtroLocalDashboard").addEventListener("change", (e) => {
-    const localSelecionado = e.target.value;
-    mostrarClientesPorLocal(localSelecionado, vendas);
-  });
+  // Evento filtro local removido daqui, está no menu separado agora.
 };
 
 // === MOSTRAR VENDAS DO DIA NO DASHBOARD (COM DATA DE PAGAMENTO) ===
@@ -373,12 +359,13 @@ window.mostrarDiaDashboard = (dataCompleta) => {
       }).join("");
 
       return `
-        <div class="card compra-info" style="border-left: 4px solid #c06078; margin-bottom: 15px;">
+        <div class="card compra-info" style="border-left: 4px solid #c06078; margin-bottom: 15px; padding: 10px;">
           <h3>${nome}</h3>
           ${pagamentos}
           <p><strong>Total vendido:</strong> R$ ${totalOriginal.toFixed(2).replace(".", ",")}</p>
           <p><strong>Total pago parcial:</strong> R$ ${totalPagoParcial.toFixed(2).replace(".", ",")}</p>
-          <p><strong>Falta pagar:</strong> R$ ${totalFalta.toFixed(2).replace(".", ",")}</p>
+          <p><strong>Falta receber:</strong> R$ ${totalFalta.toFixed(2).replace(".", ",")}</p>
+          <p><strong>Telefone:</strong> ${telefone === "sem-telefone" ? "Não informado" : telefone}</p>
         </div>
       `;
     }).join("");
@@ -387,123 +374,46 @@ window.mostrarDiaDashboard = (dataCompleta) => {
   });
 };
 
-// === MOSTRAR CLIENTES POR LOCAL (FILTRO) ===
-function mostrarClientesPorLocal(localSelecionado, todasVendas) {
-  if (!localSelecionado) {
-    document.getElementById("clientesPorLocal").innerHTML = "";
-    document.getElementById("detalhesClienteLocal").innerHTML = "";
-    return;
-  }
+// === NOVA TELA FILTRO POR LOCAL ===
+window.showFiltroPorLocal = async () => {
+  const snap = await getDocs(collection(db, "vendas"));
+  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-  // Agrupa clientes únicos por telefone
-  const clientesMap = {};
-  todasVendas.forEach(v => {
-    if (v.local === localSelecionado && v.status !== "pago") {
-      clientesMap[v.telefone] = {
-        cliente: v.cliente,
-        telefone: v.telefone,
-        vendas: clientesMap[v.telefone]?.vendas || []
-      };
-      clientesMap[v.telefone].vendas.push(v);
-    }
+  // Agrupar por local
+  const gruposLocal = {};
+  vendas.forEach(v => {
+    if (!v.local) return;
+    gruposLocal[v.local] = gruposLocal[v.local] || [];
+    gruposLocal[v.local].push(v);
   });
 
-  const clientes = Object.values(clientesMap);
+  let html = `<h2>Filtro por Local</h2>`;
+  for (const [local, vendasLocal] of Object.entries(gruposLocal)) {
+    html += `<section style="margin-bottom: 20px;">
+      <h3>${local} (${vendasLocal.length} vendas)</h3>
+    `;
 
-  if (!clientes.length) {
-    document.getElementById("clientesPorLocal").innerHTML = "<p>Sem clientes para este local.</p>";
-    document.getElementById("detalhesClienteLocal").innerHTML = "";
-    return;
-  }
-
-  const listaClientesHtml = clientes.map(c => `
-    <p style="cursor:pointer; color:#c06078; font-weight:bold;" onclick="mostrarDetalhesClienteLocal('${c.telefone}')">
-      ${c.cliente}
-    </p>
-  `).join("");
-
-  document.getElementById("clientesPorLocal").innerHTML = listaClientesHtml;
-
-  // Armazena globalmente para acesso posterior no detalhe do cliente
-  window.clientesPorLocalMap = clientesMap;
-}
-
-// === MOSTRAR DETALHES DO CLIENTE SELECIONADO NO FILTRO POR LOCAL ===
-window.mostrarDetalhesClienteLocal = (telefone) => {
-  const clienteData = window.clientesPorLocalMap?.[telefone];
-  if (!clienteData) return;
-
-  const vendas = clienteData.vendas;
-
-  const cards = vendas.map(v => {
-    return `
-      <div class="card compra-info" style="border-left: 4px solid #a5405d; margin-bottom: 15px;">
-        <h3>${v.cliente}</h3>
-        <p><strong>Produtos:</strong> ${v.produtosVendidos.join(", ")}</p>
+    vendasLocal.forEach(v => {
+      html += `
+      <div class="card" style="border-left: 4px solid #c06078; margin-bottom: 10px; padding: 10px;">
+        <p><strong>Cliente:</strong> ${v.cliente}</p>
+        <p><strong>Telefone:</strong> ${v.telefone || "Não informado"}</p>
         <p><strong>Valor:</strong> R$ ${parseFloat(v.valor).toFixed(2).replace(".", ",")}</p>
         <p><strong>Status:</strong> ${v.status}</p>
-        <p><strong>Pagamento para:</strong> ${v.dataReceber || "Sem data"}</p>
-        <button onclick="reenviarComprovante('${v.id}')">Reenviar Comprovante</button>
-        <button onclick="marcarPago('${v.id}')">Pago</button>
+        <p><strong>Produtos:</strong></p>
+        <ul style="margin-left: 15px;">
+          ${v.produtosVendidos ? v.produtosVendidos.map(p => `<li>${p}</li>`).join("") : "Nenhum"}
+        </ul>
       </div>
-    `;
-  }).join("");
+      `;
+    });
 
-  document.getElementById("detalhesClienteLocal").innerHTML = cards;
-};
-
-// === REENVIAR COMPROVANTE ===
-window.reenviarComprovante = async (idVenda) => {
-  const docRef = doc(db, "vendas", idVenda);
-  const docSnap = await getDocs(collection(db, "vendas"));
-  const vendaDoc = (await docRef.get()).data();
-
-  if (!vendaDoc) {
-    alert("Venda não encontrada.");
-    return;
+    html += `</section>`;
   }
 
-  const v = vendaDoc;
-
-  let numero = v.telefone || "";
-  if (!numero.startsWith("55")) numero = "55" + numero;
-
-  const listaProdutos = v.produtosVendidos?.map(p => `- ${p}`).join("\n") || "";
-
-  const mensagem = `Olá ${v.cliente}!
-
-Segue o comprovante da sua compra na Ana Buck Doces:
-
-Produtos:
-${listaProdutos}
-
-Valor: R$ ${parseFloat(v.valor).toFixed(2).replace(".", ",")}
-Status: ${v.status.toUpperCase()}${v.status !== "pago" ? `\nPagamento para: ${v.dataReceber}` : ""}
-
-💳 CHAVE PIX (CNPJ): 57.010.512/0001-56
-📩 Por favor, envie o comprovante após o pagamento.
-
-Obrigada pela preferência!`;
-
-  const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
-  window.open(link, "_blank");
+  document.getElementById("conteudo").innerHTML = html;
 };
 
-// === MARCAR COMO PAGO ===
-window.marcarPago = async (idVenda) => {
-  if (!confirm("Marcar esta venda como PAGO? Ela será removida do filtro local e cobrança.")) return;
-
-  const docRef = doc(db, "vendas", idVenda);
-  await updateDoc(docRef, {
-    status: "pago",
-    faltaReceber: 0,
-    valorParcial: 0,
-    dataReceber: null
-  });
-
-  alert("Venda marcada como PAGO.");
-  showDashboard();
-};
 // === TELA DE COBRANÇA (ATUALIZADA) ===
 window.showCobranca = async () => {
   const snap = await getDocs(collection(db, "vendas"));
