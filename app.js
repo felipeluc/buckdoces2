@@ -354,6 +354,9 @@ window.showDashboard = async () => {
 
   gerarCalendario(vendas, mesAtual, anoAtual);
 };
+setTimeout(() => {
+  gerarCalendario(vendas, mesAtual, anoAtual);
+}, 0);
 
 // === TELA DE COBRANÇA (ATUALIZADA) ===
 window.showCobranca = async () => {
