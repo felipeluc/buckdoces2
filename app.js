@@ -263,7 +263,7 @@ Obrigada pela preferência!`;
   window.open(link, "_blank");
 };
 
-// === DASHBOARD ATUALIZADO ===
+// === DASHBOARD COMPLETO ===
 window.showDashboard = async () => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -354,9 +354,81 @@ window.showDashboard = async () => {
 
   gerarCalendario(vendas, mesAtual, anoAtual);
 };
-setTimeout(() => {
-  gerarCalendario(vendas, mesAtual, anoAtual);
-}, 0);
+
+// === GERA CALENDÁRIO NO DASHBOARD ===
+function gerarCalendario(vendas, mes, ano) {
+  const vendasPorData = {};
+  vendas.forEach(v => {
+    if (!v.data) return;
+    vendasPorData[v.data] = vendasPorData[v.data] || [];
+    vendasPorData[v.data].push(v);
+  });
+
+  const diasNoMes = new Date(ano, mes, 0).getDate();
+  const prefixoData = `${ano}-${String(mes).padStart(2, "0")}`;
+  let calendarioHtml = "";
+
+  for (let i = 1; i <= diasNoMes; i++) {
+    const diaStr = String(i).padStart(2, "0");
+    const dataCompleta = `${prefixoData}-${diaStr}`;
+    const vendasDoDia = vendasPorData[dataCompleta] || [];
+
+    const totalDia = vendasDoDia.reduce((acc, v) => {
+      const falta = parseFloat(v.faltaReceber) || 0;
+      const valorBase = parseFloat(v.valor) || 0;
+      return acc + (falta > 0 ? falta : valorBase);
+    }, 0);
+
+    calendarioHtml += `
+      <div class="calendar-day" onclick="mostrarDiaDashboard('${dataCompleta}')" style="cursor:pointer; border:1px solid #ccc; margin: 4px; padding: 8px; border-radius: 6px; text-align:center; width: 60px;">
+        <div style="font-weight:bold;">${diaStr}</div>
+        <div style="color:#c06078; font-size: 0.9em;">${totalDia > 0 ? totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : ""}</div>
+      </div>
+    `;
+  }
+
+  document.getElementById("dashboardCalendar").innerHTML = calendarioHtml;
+}
+
+// === MOSTRAR DETALHES DO DIA NO DASHBOARD ===
+window.mostrarDiaDashboard = async (dataCompleta) => {
+  const snap = await getDocs(collection(db, "vendas"));
+  const todasVendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const vendasDoDia = todasVendas.filter(v => v.data === dataCompleta);
+
+  if (!vendasDoDia.length) {
+    document.getElementById("detalhesDiaDashboard").innerHTML = "<p>Sem vendas neste dia.</p>";
+    return;
+  }
+
+  const cards = vendasDoDia.map(v => {
+    const produtos = v.produtosVendidos?.map(p => `<li>${p}</li>`).join("") || "Nenhum";
+    return `
+      <div class="card compra-info" style="border-left: 4px solid #c06078; margin-bottom: 15px; padding: 10px;">
+        <p><strong>Cliente:</strong> ${v.cliente}</p>
+        <p><strong>Telefone:</strong> ${v.telefone || "Não informado"}</p>
+        <p><strong>Local:</strong> ${v.local || "Não informado"}</p>
+        <p><strong>Valor:</strong> R$ ${parseFloat(v.valor).toFixed(2).replace(".", ",")}</p>
+        <p><strong>Status:</strong> ${v.status}</p>
+        <p><strong>Forma:</strong> ${v.forma || "Não informado"}</p>
+        ${v.status !== "pago" ? `<p><strong>Data Receber:</strong> ${v.dataReceber || "Não informada"}</p>` : ""}
+        ${v.status === "parcial" ? `<p><strong>Valor Parcial:</strong> R$ ${parseFloat(v.valorParcial).toFixed(2).replace(".", ",")}</p>` : ""}
+        ${v.status !== "pago" ? `<p><strong>Falta Receber:</strong> R$ ${parseFloat(v.faltaReceber).toFixed(2).replace(".", ",")}</p>` : ""}
+        <p><strong>Produtos Vendidos:</strong></p>
+        <ul>${produtos}</ul>
+      </div>
+    `;
+  }).join("");
+
+  document.getElementById("detalhesDiaDashboard").innerHTML = cards;
+};
+
+// === FORMATAR DATA PARA DD-MM-AAAA ===
+function formatarData(data) {
+  if (!data) return "-";
+  const [ano, mes, dia] = data.split("-");
+  return `${dia}-${mes}-${ano}`;
+}
 
 // === TELA DE COBRANÇA (ATUALIZADA) ===
 window.showCobranca = async () => {
