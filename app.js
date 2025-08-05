@@ -20,7 +20,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-
 // === INTERFACE LOGIN ===
 document.getElementById("root").innerHTML = `
   <h1 style="text-align: center; color: #d48c94">Buck Doces</h1>
@@ -87,7 +86,7 @@ window.showCadastro = (usuario) => {
     <input id="cliente" placeholder="Nome do cliente" />
     <input id="telefone" placeholder="Telefone (ex: 5599999999999)" />
     <input id="local" placeholder="Local da venda" />
-    <input id="valor" placeholder="Valor (R$)" type="number" />
+    <input id="valor" placeholder="Valor (R$)" />
     <div><strong>Produtos vendidos:</strong>${produtoOptions}</div>
     <select id="status">
       <option value="pago">Pago</option>
@@ -98,6 +97,14 @@ window.showCadastro = (usuario) => {
     <button onclick="cadastrar('${usuario}')">Salvar</button>
     <button onclick="enviarComprovante()">Enviar Comprovante via WhatsApp</button>
   `;
+
+  // === FORMATAÇÃO DE MOEDA AUTOMÁTICA ===
+  const valorInput = document.getElementById("valor");
+  valorInput.addEventListener("input", () => {
+    let val = valorInput.value.replace(/\D/g, "");
+    val = (parseInt(val) / 100).toFixed(2);
+    valorInput.value = `R$ ${val.replace(".", ",")}`;
+  });
 
   // === CAMPOS EXTRAS DINÂMICOS ===
   document.getElementById("status").addEventListener("change", (e) => {
@@ -121,7 +128,6 @@ window.showCadastro = (usuario) => {
     document.getElementById("extras").innerHTML = html;
   });
 };
-
 // === ALTERAR QUANTIDADE DE PRODUTO ===
 window.alterarQuantidade = (index, delta) => {
   const span = document.getElementById(`quantidade-${index}`);
@@ -139,12 +145,14 @@ function obterProdutosSelecionados() {
     })
     .filter(Boolean);
 }
+
 // === CADASTRAR VENDA ===
 window.cadastrar = async (usuario) => {
   const cliente = document.getElementById("cliente").value.trim();
   const telefone = document.getElementById("telefone").value.trim();
   const local = document.getElementById("local").value.trim();
-  const valor = parseFloat(document.getElementById("valor").value);
+  const valorFormatado = document.getElementById("valor").value.trim().replace("R$ ", "").replace(".", "").replace(",", ".");
+  const valor = parseFloat(valorFormatado);
   const status = document.getElementById("status").value;
   const forma = document.getElementById("forma")?.value || "";
   const dataReceber = document.getElementById("dataReceber")?.value || "";
@@ -189,24 +197,24 @@ window.cadastrar = async (usuario) => {
 
   alert("Venda salva!");
 };
-
 // === ENVIAR COMPROVANTE VIA WHATSAPP ===
 window.enviarComprovante = () => {
   const numero = document.getElementById("telefone")?.value.trim();
-  const valor = document.getElementById("valor")?.value.trim();
+  const valorCampo = document.getElementById("valor")?.value.trim();
   const cliente = document.getElementById("cliente")?.value.trim();
   const status = document.getElementById("status")?.value;
   const dataReceber = document.getElementById("dataReceber")?.value || "";
   const produtosSelecionados = obterProdutosSelecionados();
 
-  if (!numero || !valor || !cliente || produtosSelecionados.length === 0) {
+  if (!numero || !valorCampo || !cliente || produtosSelecionados.length === 0) {
     alert("Preencha todos os campos antes de enviar o comprovante.");
     return;
   }
 
+  // Remove o símbolo R$ se houver e ajusta ponto/vírgula
+  const valor = parseFloat(valorCampo.replace("R$ ", "").replace(".", "").replace(",", ".")).toFixed(2);
   const listaProdutos = produtosSelecionados.map(p => `- ${p}`).join("\n");
 
-  // === MENSAGEM CORRETA COM PIX E PEDIDO DE COMPROVANTE ===
   const mensagem = `Olá ${cliente}!  
 
 Segue o comprovante da sua compra na Ana Buck Doces:
@@ -234,7 +242,6 @@ window.showDashboard = async () => {
   const hojeVendas = vendas.filter(v => v.data === hoje);
   const totalHoje = hojeVendas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
 
-  // Valor a receber considera sempre faltaReceber > 0, caso contrário ignora
   const aReceber = vendas
     .filter(v => v.status !== "pago")
     .reduce((acc, v) => acc + ((parseFloat(v.faltaReceber) > 0) ? parseFloat(v.faltaReceber) : 0), 0);
@@ -242,11 +249,10 @@ window.showDashboard = async () => {
   document.getElementById("conteudo").innerHTML = `
     <h2>Dashboard</h2>
     <p>Vendas hoje: ${hojeVendas.length}</p>
-    <p>Total vendido hoje: R$ ${totalHoje.toFixed(2)}</p>
-    <p>Valor a receber: R$ ${aReceber.toFixed(2)}</p>
+    <p>Total vendido hoje: ${totalHoje.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+    <p>Valor a receber: ${aReceber.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
   `;
 };
-
 // === COBRANÇA (INÍCIO) ===
 window.showCobranca = async () => {
   const snap = await getDocs(collection(db, "vendas"));
@@ -284,14 +290,14 @@ window.showCobranca = async () => {
       const diaStr = String(i + 1).padStart(2, "0");
       const vendasDoDia = diasDoMes[diaStr] || [];
 
-      // 👇 Ajuste: se faltaReceber > 0, considera faltaReceber, caso contrário o valor original
+      // Se faltaReceber > 0, considera faltaReceber, caso contrário o valor original
       const totalDia = vendasDoDia.reduce((acc, v) => {
         const falta = parseFloat(v.faltaReceber) || 0;
         const valor = parseFloat(v.valor) || 0;
         return acc + (falta > 0 ? falta : valor);
       }, 0);
 
-      const valorHtml = totalDia > 0 ? `<div class="calendar-day-value">R$ ${totalDia.toFixed(2)}</div>` : "";
+      const valorHtml = totalDia > 0 ? `<div class="calendar-day-value">${totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>` : "";
       return `
         <div class="calendar-day" onclick="mostrarDia('${mes}-${diaStr}')">
           <div>${diaStr}</div>
@@ -346,7 +352,7 @@ window.mostrarDia = (dataCompleta) => {
         <div class="compra-info">
           <p><strong>Data:</strong> ${formatarData(v.data)}</p>
           <p><strong>Local:</strong> ${v.local}</p>
-          <p><strong>Valor:</strong> R$ ${parseFloat(v.valor).toFixed(2)}</p>
+          <p><strong>Valor:</strong> ${parseFloat(v.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
           <p><strong>Status:</strong> ${v.status}</p>
           <p><strong>Forma de Pagamento:</strong> ${v.forma || "-"}</p>
           <p><strong>Para pagar em:</strong> ${formatarData(v.dataReceber) || "-"}</p>
@@ -360,9 +366,9 @@ window.mostrarDia = (dataCompleta) => {
       <div class="card">
         <h3>${nome} - ${telefone}</h3>
         <p><strong>Status:</strong> ${status}</p>
-        <p><strong>Total da compra:</strong> R$ ${totalOriginal.toFixed(2)}</p>
-        <p><strong>Pago parcial:</strong> R$ ${totalPagoParcial.toFixed(2)}</p>
-        <p><strong>Falta pagar:</strong> R$ ${faltaPagar.toFixed(2)}</p>
+        <p><strong>Total da compra:</strong> ${totalOriginal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+        <p><strong>Pago parcial:</strong> ${totalPagoParcial.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+        <p><strong>Falta pagar:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
         ${compras}
         <button onclick="marcarPagoGrupo('${telefone}', '${dataCompleta}')">Pago</button>
         <button onclick="marcarParcialGrupo('${telefone}', '${dataCompleta}')">Pago Parcial</button>
@@ -385,6 +391,7 @@ window.marcarPagoGrupo = async (telefone, dataCompleta) => {
   });
 
   for (const docRef of vendas) {
+    const v = docRef.data();
     await updateDoc(doc(db, "vendas", docRef.id), {
       status: "pago",
       faltaReceber: 0,
@@ -397,7 +404,6 @@ window.marcarPagoGrupo = async (telefone, dataCompleta) => {
   mostrarDia(dataCompleta);
   showDashboard();
 };
-
 // === FORM DE PAGO PARCIAL ===
 window.marcarParcialGrupo = (telefone, dataCompleta) => {
   const div = document.getElementById(`parcial-${telefone}`);
@@ -407,7 +413,6 @@ window.marcarParcialGrupo = (telefone, dataCompleta) => {
     <button onclick="confirmarParcial('${telefone}', '${dataCompleta}')">Confirmar</button>
   `;
 };
-
 // === CONFIRMAR PAGO PARCIAL (CORRIGIDO PARA MOVER O GRUPO INTEIRO) ===
 window.confirmarParcial = async (telefone, dataCompleta) => {
   const recebidoAgora = parseFloat(document.getElementById(`valorRecebido-${telefone}`).value);
@@ -467,8 +472,7 @@ window.reagendarGrupo = (telefone, dataCompleta) => {
     <button onclick="confirmarReagendar('${telefone}', '${dataCompleta}')">Confirmar</button>
   `;
 };
-
-// === CONFIRMAR REAGENDAMENTO (MANTÉM O GRUPO INTEIRO JUNT0) ===
+// === CONFIRMAR REAGENDAMENTO (MANTÉM O GRUPO INTEIRO JUNTO) ===
 window.confirmarReagendar = async (telefone, dataCompleta) => {
   const novaData = document.getElementById(`novaData-${telefone}`).value;
   if (!novaData) return alert("Selecione uma nova data.");
@@ -488,7 +492,6 @@ window.confirmarReagendar = async (telefone, dataCompleta) => {
   alert("Cobrança reagendada para o grupo inteiro!");
   mostrarDia(novaData);
 };
-
 // === MENSAGEM DE COBRANÇA PARA WHATSAPP (DETALHADA E COM PIX) ===
 window.cobrarWhats = (telefone, dataCompleta) => {
   const snap = JSON.parse(localStorage.getItem("vendas"));
