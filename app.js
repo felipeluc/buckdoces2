@@ -263,7 +263,7 @@ Obrigada pela preferência!`;
   window.open(link, "_blank");
 };
 
-// === DASHBOARD COMPLETO: Calendário + Resumo + Rankings ===
+// === DASHBOARD ATUALIZADO ===
 window.showDashboard = async () => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -272,7 +272,6 @@ window.showDashboard = async () => {
   const anoAtual = hoje.getFullYear();
   const mesAtual = hoje.getMonth() + 1;
 
-  // Opções do select de mês
   const mesOptions = Array.from({ length: 12 }, (_, i) => {
     const mesNum = i + 1;
     const mesLabel = new Date(0, mesNum - 1).toLocaleString("pt-BR", { month: "long" });
@@ -283,49 +282,20 @@ window.showDashboard = async () => {
   const hojeVendas = vendas.filter(v => v.data === hojeStr);
   const totalHoje = hojeVendas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
 
-  const aReceber = vendas.filter(v => v.status !== "pago")
+  const aReceber = vendas
+    .filter(v => v.status !== "pago")
     .reduce((acc, v) => acc + ((parseFloat(v.faltaReceber) > 0) ? parseFloat(v.faltaReceber) : 0), 0);
 
-  // Valor recebido até agora (somatório das vendas pagas + valor parcial)
   const valorRecebido = vendas.reduce((acc, v) => {
-    if (v.status === "pago") {
-      return acc + (parseFloat(v.valor) || 0);
-    } else if (v.status === "parcial") {
-      return acc + (parseFloat(v.valorParcial) || 0);
-    }
-    return acc;
+    const recebido =
+      v.status === "pago"
+        ? parseFloat(v.valor) || 0
+        : (parseFloat(v.valorParcial) || 0);
+    return acc + recebido;
   }, 0);
 
-  // === Top 5 Dias com mais valores para receber ===
-  const porDiaReceber = {};
-  vendas.forEach(v => {
-    if (!v.dataReceber || v.status === "pago") return;
-    const valor = parseFloat(v.faltaReceber) || 0;
-    porDiaReceber[v.dataReceber] = (porDiaReceber[v.dataReceber] || 0) + valor;
-  });
-  const topDias = Object.entries(porDiaReceber)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
-
-  // === Top 10 Pessoas que mais devem ===
-  const porPessoa = {};
-  vendas.forEach(v => {
-    if (v.status === "pago") return;
-    const tel = v.telefone || "sem-telefone";
-    const valor = parseFloat(v.faltaReceber) || 0;
-    if (!porPessoa[tel]) {
-      porPessoa[tel] = { nome: v.cliente || "Sem nome", total: 0 };
-    }
-    porPessoa[tel].total += valor;
-  });
-  const topPessoas = Object.entries(porPessoa)
-    .sort((a, b) => b[1].total - a[1].total)
-    .slice(0, 10);
-
-  // Monta o HTML principal
   document.getElementById("conteudo").innerHTML = `
     <h2>Dashboard</h2>
-
     <section style="margin-bottom:20px;">
       <h3>Vendas hoje: ${hojeVendas.length}</h3>
       <p>Total vendido hoje: ${totalHoje.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
@@ -340,116 +310,15 @@ window.showDashboard = async () => {
       <div class="calendar" id="dashboardCalendar" style="display: flex; flex-wrap: wrap;"></div>
       <div id="detalhesDiaDashboard"></div>
     </section>
-
-    <section style="margin-top:30px;">
-      <h3>📌 Dias com mais valores para receber (Top 5)</h3>
-      <div style="display: flex; flex-wrap: wrap; gap: 15px;">
-        ${topDias.map(([data, valor]) => `
-          <div class="card" style="flex:1; min-width: 220px; background: #fafafa; padding: 12px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-            <p><strong>📅 ${formatarData(data)}</strong></p>
-            <p>💰 ${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-          </div>
-        `).join("")}
-      </div>
-    </section>
-
-    <section style="margin-top:30px;">
-      <h3>📌 Pessoas que mais devem (Top 10)</h3>
-      <div style="display: flex; flex-wrap: wrap; gap: 15px;">
-        ${topPessoas.map(([tel, { nome, total }]) => `
-          <div class="card" style="flex:1; min-width: 220px; background: #fefefe; padding: 12px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-            <p><strong>👤 ${nome}</strong></p>
-            <p>📞 ${tel}</p>
-            <p>💰 ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-          </div>
-        `).join("")}
-      </div>
-    </section>
   `;
 
-  // Evento para trocar mês e atualizar calendário
   const selectMes = document.getElementById("mesSelecionado");
   selectMes.addEventListener("change", () => {
     gerarCalendario(vendas, parseInt(selectMes.value), anoAtual);
   });
 
-  // Gera calendário inicialmente com mês atual
   gerarCalendario(vendas, mesAtual, anoAtual);
 };
-
-// Função para gerar o calendário (vendas por dia)
-function gerarCalendario(vendas, mes, ano) {
-  const vendasPorData = {};
-  vendas.forEach(v => {
-    if (!v.data) return;
-    vendasPorData[v.data] = vendasPorData[v.data] || [];
-    vendasPorData[v.data].push(v);
-  });
-
-  const diasNoMes = new Date(ano, mes, 0).getDate();
-  const prefixoData = `${ano}-${String(mes).padStart(2, "0")}`;
-  let calendarioHtml = "";
-
-  for (let i = 1; i <= diasNoMes; i++) {
-    const diaStr = String(i).padStart(2, "0");
-    const dataCompleta = `${prefixoData}-${diaStr}`;
-    const vendasDoDia = vendasPorData[dataCompleta] || [];
-
-    const totalDia = vendasDoDia.reduce((acc, v) => {
-      const falta = parseFloat(v.faltaReceber) || 0;
-      const valorBase = parseFloat(v.valor) || 0;
-      return acc + (falta > 0 ? falta : valorBase);
-    }, 0);
-
-    calendarioHtml += `
-      <div class="calendar-day" onclick="mostrarDiaDashboard('${dataCompleta}')" style="cursor:pointer; border:1px solid #ccc; margin: 4px; padding: 8px; border-radius: 6px; text-align:center; width: 60px;">
-        <div style="font-weight:bold;">${diaStr}</div>
-        <div style="color:#c06078; font-size: 0.9em;">${totalDia > 0 ? totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : ""}</div>
-      </div>
-    `;
-  }
-  document.getElementById("dashboardCalendar").innerHTML = calendarioHtml;
-}
-
-// Função para mostrar detalhes das vendas de um dia ao clicar no calendário
-window.mostrarDiaDashboard = async (dataCompleta) => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const todasVendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  const vendasDoDia = todasVendas.filter(v => v.data === dataCompleta);
-
-  if (!vendasDoDia.length) {
-    document.getElementById("detalhesDiaDashboard").innerHTML = "<p>Sem vendas neste dia.</p>";
-    return;
-  }
-
-  const cards = vendasDoDia.map(v => {
-    const produtos = v.produtosVendidos?.map(p => `<li>${p}</li>`).join("") || "Nenhum";
-    return `
-      <div class="card compra-info" style="border-left: 4px solid #c06078; margin-bottom: 15px; padding: 10px;">
-        <p><strong>Cliente:</strong> ${v.cliente}</p>
-        <p><strong>Telefone:</strong> ${v.telefone || "Não informado"}</p>
-        <p><strong>Local:</strong> ${v.local || "Não informado"}</p>
-        <p><strong>Valor:</strong> R$ ${parseFloat(v.valor).toFixed(2).replace(".", ",")}</p>
-        <p><strong>Status:</strong> ${v.status}</p>
-        <p><strong>Forma:</strong> ${v.forma || "Não informado"}</p>
-        ${v.status !== "pago" ? `<p><strong>Data Receber:</strong> ${v.dataReceber || "Não informada"}</p>` : ""}
-        ${v.status === "parcial" ? `<p><strong>Valor Parcial:</strong> R$ ${parseFloat(v.valorParcial).toFixed(2).replace(".", ",")}</p>` : ""}
-        ${v.status !== "pago" ? `<p><strong>Falta Receber:</strong> R$ ${parseFloat(v.faltaReceber).toFixed(2).replace(".", ",")}</p>` : ""}
-        <p><strong>Produtos Vendidos:</strong></p>
-        <ul>${produtos}</ul>
-      </div>
-    `;
-  }).join("");
-
-  document.getElementById("detalhesDiaDashboard").innerHTML = cards;
-};
-
-// Função para formatar data DD-MM-AAAA
-function formatarData(data) {
-  if (!data) return "-";
-  const [ano, mes, dia] = data.split("-");
-  return `${dia}-${mes}-${ano}`;
-}
 
 // === TELA DE COBRANÇA (ATUALIZADA) ===
 window.showCobranca = async () => {
