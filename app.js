@@ -20,6 +20,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
 // === INTERFACE LOGIN ===
 document.getElementById("root").innerHTML = `
   <h1 style="text-align: center; color: #d48c94">Buck Doces</h1>
@@ -143,6 +144,7 @@ window.showCadastro = (usuario) => {
     document.getElementById("extras").innerHTML = html;
   });
 };
+
 // === ALTERAR QUANTIDADE DE PRODUTO ===
 window.alterarQuantidade = (index, delta) => {
   const span = document.getElementById(`quantidade-${index}`);
@@ -150,7 +152,6 @@ window.alterarQuantidade = (index, delta) => {
   valor = Math.max(0, valor + delta);
   span.innerText = valor;
 };
-
 // === OBTÉM PRODUTOS SELECIONADOS ===
 function obterProdutosSelecionados() {
   return produtosLista
@@ -166,7 +167,8 @@ window.cadastrar = async (usuario) => {
   const cliente = document.getElementById("cliente").value.trim();
   let telefone = document.getElementById("telefone").value.trim();
   const local = document.getElementById("local").value.trim();
-  const valorFormatado = document.getElementById("valor").value.trim().replace("R$ ", "").replace(".", "").replace(",", ".");
+  const valorFormatado = document.getElementById("valor").value.trim()
+    .replace("R$ ", "").replace(".", "").replace(",", ".");
   const valor = parseFloat(valorFormatado);
   const status = document.getElementById("status").value;
   const forma = document.getElementById("forma")?.value || "";
@@ -260,15 +262,24 @@ Obrigada pela preferência!`;
   const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
   window.open(link, "_blank");
 };
+
+// === FUNÇÃO PARA FORMATAR DATAS NO FORMATO DD-MM-AAAA ===
+function formatarData(data) {
+  if (!data) return "-";
+  const [ano, mes, dia] = data.split("-");
+  return `${dia}-${mes}-${ano}`;
+}
 // === DASHBOARD ===
 window.showDashboard = async () => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => doc.data());
   const hoje = new Date().toISOString().split("T")[0];
 
+  // Vendas do dia atual (baseado em data da venda, não dataReceber)
   const hojeVendas = vendas.filter(v => v.data === hoje);
   const totalHoje = hojeVendas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
 
+  // Soma o valor a receber (de vendas não pagas, valor que falta receber)
   const aReceber = vendas
     .filter(v => v.status !== "pago")
     .reduce((acc, v) => acc + ((parseFloat(v.faltaReceber) > 0) ? parseFloat(v.faltaReceber) : 0), 0);
@@ -286,7 +297,7 @@ window.showCobranca = async () => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-  // Pega apenas as que ainda não estão pagas
+  // Pega apenas as que ainda não estão pagas e possuem data para receber
   const pendentes = vendas.filter(v => v.status !== "pago" && v.dataReceber);
 
   // Salva localmente para exibir nos cards depois
@@ -299,7 +310,7 @@ window.showCobranca = async () => {
     <div id="detalhesDia"></div>
   `;
 
-  // Filtro do mês
+  // Filtro do mês para mostrar calendário com valores
   document.getElementById("mesFiltro").addEventListener("change", e => {
     const mes = e.target.value;
     if (!mes) return;
@@ -336,7 +347,6 @@ window.showCobranca = async () => {
     document.getElementById("calendario").innerHTML = `<div class="calendar">${calendarioHtml}</div>`;
   });
 };
-
 // === MOSTRAR COBRANÇAS DE UM DIA ===
 window.mostrarDia = (dataCompleta) => {
   const snap = localStorage.getItem("vendas");
@@ -374,7 +384,7 @@ window.mostrarDia = (dataCompleta) => {
 
     const status = vendas.every(v => v.status === "pago") ? "✅ Pago" : "🔔 Pendência";
 
-    // Lista de compras
+    // Lista de compras formatada
     const compras = vendas.map(v => {
       const produtosFormatado = (v.produtosVendidos || []).map(p => `<div>${p}</div>`).join("");
       return `
@@ -443,7 +453,6 @@ window.marcarParcialGrupo = (telefone, dataCompleta) => {
     <button onclick="confirmarParcial('${telefone}', '${dataCompleta}')">Confirmar</button>
   `;
 };
-
 // === CONFIRMAR PAGO PARCIAL (Atualizado para grupo) ===
 window.confirmarParcial = async (telefone, dataCompleta) => {
   const recebidoAgora = parseFloat(document.getElementById(`valorRecebido-${telefone}`).value);
@@ -495,7 +504,6 @@ window.confirmarParcial = async (telefone, dataCompleta) => {
   mostrarDia(dataCompleta);
   showDashboard();
 };
-
 // === FORM DE REAGENDAR COBRANÇA ===
 window.reagendarGrupo = (telefone, dataCompleta) => {
   const div = document.getElementById(`reagendar-${telefone}`);
@@ -525,7 +533,6 @@ window.confirmarReagendar = async (telefone, dataCompleta) => {
   alert("Cobrança reagendada para o grupo inteiro!");
   mostrarDia(novaData);
 };
-
 // === MENSAGEM DE COBRANÇA PARA WHATSAPP (DETALHADA E COM PIX) ===
 window.cobrarWhats = (telefone, dataCompleta) => {
   const snap = JSON.parse(localStorage.getItem("vendas"));
