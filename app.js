@@ -373,6 +373,48 @@ window.showDashboard = async () => {
   gerarCalendario(vendas, mesAtual, anoAtual);
 };
 
+// === CALENDÁRIO POR MÊS COM VALORES ===
+function gerarCalendario(vendas, mes, ano) {
+  const vendasPorData = {};
+  vendas.forEach(v => {
+    if (!v.data) return;
+    vendasPorData[v.data] = vendasPorData[v.data] || [];
+    vendasPorData[v.data].push(v);
+  });
+
+  const diasNoMes = new Date(ano, mes, 0).getDate();
+  const prefixoData = `${ano}-${String(mes).padStart(2, "0")}`;
+  let calendarioHtml = "";
+
+  for (let i = 1; i <= diasNoMes; i++) {
+    const diaStr = String(i).padStart(2, "0");
+    const dataCompleta = `${prefixoData}-${diaStr}`;
+    const vendasDoDia = vendasPorData[dataCompleta] || [];
+
+    const totalDia = vendasDoDia.reduce((acc, v) => {
+      const falta = parseFloat(v.faltaReceber) || 0;
+      const valorBase = parseFloat(v.valor) || 0;
+      return acc + (falta > 0 ? falta : valorBase);
+    }, 0);
+
+    calendarioHtml += `
+      <div class="calendar-day" onclick="mostrarDiaDashboard('${dataCompleta}')" style="cursor:pointer; border:1px solid #ccc; margin: 4px; padding: 8px; border-radius: 6px; text-align:center; width: 60px;">
+        <div style="font-weight:bold;">${diaStr}</div>
+        <div style="color:#c06078; font-size: 0.9em;">${totalDia > 0 ? totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : ""}</div>
+      </div>
+    `;
+  }
+
+  document.getElementById("dashboardCalendar").innerHTML = calendarioHtml;
+}
+
+// === FORMATAÇÃO DE DATA (DD/MM/AAAA) ===
+function formatarData(data) {
+  if (!data) return "-";
+  const [ano, mes, dia] = data.split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+
 // === TELA DE COBRANÇA (ATUALIZADA) ===
 window.showCobranca = async () => {
   const snap = await getDocs(collection(db, "vendas"));
