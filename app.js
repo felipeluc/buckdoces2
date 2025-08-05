@@ -281,8 +281,40 @@ window.showDashboard = async () => {
   const hojeStr = hoje.toISOString().split("T")[0];
   const hojeVendas = vendas.filter(v => v.data === hojeStr);
   const totalHoje = hojeVendas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
+
   const aReceber = vendas.filter(v => v.status !== "pago")
     .reduce((acc, v) => acc + ((parseFloat(v.faltaReceber) > 0) ? parseFloat(v.faltaReceber) : 0), 0);
+
+  const valorRecebido = vendas
+    .filter(v => v.status === "pago" || v.status === "parcial")
+    .reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
+
+  // === Top 5 dias com maior valor a receber ===
+  const diasValores = {};
+  vendas.forEach(v => {
+    if (v.status !== "pago" && v.dataReceber) {
+      diasValores[v.dataReceber] = (diasValores[v.dataReceber] || 0) + (parseFloat(v.faltaReceber) || 0);
+    }
+  });
+  const topDias = Object.entries(diasValores)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([data, valor]) => `<li><strong>${formatarData(data)}</strong>: R$ ${valor.toFixed(2).replace(".", ",")}</li>`)
+    .join("");
+
+  // === Top 10 devedores por telefone ===
+  const devedores = {};
+  vendas.forEach(v => {
+    if (v.status !== "pago" && v.telefone) {
+      devedores[v.telefone] = devedores[v.telefone] || { nome: v.cliente, total: 0 };
+      devedores[v.telefone].total += (parseFloat(v.faltaReceber) || 0);
+    }
+  });
+  const topDevedores = Object.entries(devedores)
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, 10)
+    .map(([tel, data]) => `<li><strong>${data.nome}</strong>: R$ ${data.total.toFixed(2).replace(".", ",")}</li>`)
+    .join("");
 
   document.getElementById("conteudo").innerHTML = `
     <h2>Dashboard</h2>
@@ -290,6 +322,21 @@ window.showDashboard = async () => {
       <h3>Vendas hoje: ${hojeVendas.length}</h3>
       <p>Total vendido hoje: ${totalHoje.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
       <p>Valor a receber: ${aReceber.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+      <p>Valor recebido até agora: ${valorRecebido.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+    </section>
+
+    <section style="margin-bottom:20px;">
+      <h3>📊 Dias com mais valores a receber</h3>
+      <ul style="padding-left: 20px; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;">
+        ${topDias || "<li>Nenhum resultado.</li>"}
+      </ul>
+    </section>
+
+    <section style="margin-bottom:20px;">
+      <h3>🧾 Pessoas que mais devem</h3>
+      <ul style="padding-left: 20px; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;">
+        ${topDevedores || "<li>Nenhum resultado.</li>"}
+      </ul>
     </section>
 
     <section>
@@ -307,72 +354,6 @@ window.showDashboard = async () => {
   });
 
   gerarCalendario(vendas, mesAtual, anoAtual);
-};
-
-function gerarCalendario(vendas, mes, ano) {
-  const vendasPorData = {};
-  vendas.forEach(v => {
-    if (!v.data) return;
-    vendasPorData[v.data] = vendasPorData[v.data] || [];
-    vendasPorData[v.data].push(v);
-  });
-
-  const diasNoMes = new Date(ano, mes, 0).getDate();
-  const prefixoData = `${ano}-${String(mes).padStart(2, "0")}`;
-  let calendarioHtml = "";
-
-  for (let i = 1; i <= diasNoMes; i++) {
-    const diaStr = String(i).padStart(2, "0");
-    const dataCompleta = `${prefixoData}-${diaStr}`;
-    const vendasDoDia = vendasPorData[dataCompleta] || [];
-
-    const totalDia = vendasDoDia.reduce((acc, v) => {
-      const falta = parseFloat(v.faltaReceber) || 0;
-      const valorBase = parseFloat(v.valor) || 0;
-      return acc + (falta > 0 ? falta : valorBase);
-    }, 0);
-
-    calendarioHtml += `
-      <div class="calendar-day" onclick="mostrarDiaDashboard('${dataCompleta}')" style="cursor:pointer; border:1px solid #ccc; margin: 4px; padding: 8px; border-radius: 6px; text-align:center; width: 60px;">
-        <div style="font-weight:bold;">${diaStr}</div>
-        <div style="color:#c06078; font-size: 0.9em;">${totalDia > 0 ? totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : ""}</div>
-      </div>
-    `;
-  }
-  document.getElementById("dashboardCalendar").innerHTML = calendarioHtml;
-}
-
-// === MOSTRAR VENDAS DO DIA ===
-window.mostrarDiaDashboard = async (dataCompleta) => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const todasVendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  const vendasDoDia = todasVendas.filter(v => v.data === dataCompleta);
-
-  if (!vendasDoDia.length) {
-    document.getElementById("detalhesDiaDashboard").innerHTML = "<p>Sem vendas neste dia.</p>";
-    return;
-  }
-
-  const cards = vendasDoDia.map(v => {
-    const produtos = v.produtosVendidos?.map(p => `<li>${p}</li>`).join("") || "Nenhum";
-    return `
-      <div class="card compra-info" style="border-left: 4px solid #c06078; margin-bottom: 15px; padding: 10px;">
-        <p><strong>Cliente:</strong> ${v.cliente}</p>
-        <p><strong>Telefone:</strong> ${v.telefone || "Não informado"}</p>
-        <p><strong>Local:</strong> ${v.local || "Não informado"}</p>
-        <p><strong>Valor:</strong> R$ ${parseFloat(v.valor).toFixed(2).replace(".", ",")}</p>
-        <p><strong>Status:</strong> ${v.status}</p>
-        <p><strong>Forma:</strong> ${v.forma || "Não informado"}</p>
-        ${v.status !== "pago" ? `<p><strong>Data Receber:</strong> ${v.dataReceber || "Não informada"}</p>` : ""}
-        ${v.status === "parcial" ? `<p><strong>Valor Parcial:</strong> R$ ${parseFloat(v.valorParcial).toFixed(2).replace(".", ",")}</p>` : ""}
-        ${v.status !== "pago" ? `<p><strong>Falta Receber:</strong> R$ ${parseFloat(v.faltaReceber).toFixed(2).replace(".", ",")}</p>` : ""}
-        <p><strong>Produtos Vendidos:</strong></p>
-        <ul>${produtos}</ul>
-      </div>
-    `;
-  }).join("");
-
-  document.getElementById("detalhesDiaDashboard").innerHTML = cards;
 };
 
 // === TELA DE COBRANÇA (ATUALIZADA) ===
