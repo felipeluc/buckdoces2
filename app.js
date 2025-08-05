@@ -1,133 +1,3 @@
-// === CONFIGURAÇÃO FIREBASE ===
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  getDocs,
-  updateDoc,
-  doc
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyDGg5JtE_7gVRhTlRY30bpXsmMpvPEQ3tw",
-  authDomain: "buckdoces.firebaseapp.com",
-  projectId: "buckdoces",
-  storageBucket: "buckdoces.appspot.com",
-  messagingSenderId: "781727917443",
-  appId: "1:781727917443:web:c9709b3813d28ea60982b6"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-// === INTERFACE LOGIN ===
-document.getElementById("root").innerHTML = `
-  <h1 style="text-align: center; color: #d48c94">Buck Doces</h1>
-  <div class="card login-card">
-    <select id="user">
-      <option>Ana Buck</option>
-      <option>João Buck</option>
-    </select>
-    <input type="password" id="senha" placeholder="Senha" />
-    <button onclick="login()">Entrar</button>
-  </div>
-  <div id="main"></div>
-`;
-
-// === USUÁRIOS E SENHAS ===
-const senhas = {
-  "Ana Buck": "Ana1234",
-  "João Buck": "João1234"
-};
-
-// === LOGIN ===
-window.login = () => {
-  const usuario = document.getElementById("user").value;
-  const senha = document.getElementById("senha").value;
-  if (senhas[usuario] === senha) {
-    showTabs(usuario);
-  } else {
-    alert("Senha incorreta");
-  }
-};
-
-// === MENU PRINCIPAL ===
-function showTabs(user) {
-  document.getElementById("main").innerHTML = `
-    <div class="card">
-      <button onclick="showCadastro('${user}')">Cadastrar Venda</button>
-      <button onclick="showDashboard()">Dashboard</button>
-      <button onclick="showCobranca()">Cobrança</button>
-    </div>
-    <div id="conteudo" class="card"></div>
-  `;
-}
-// === LISTA DE PRODUTOS ===
-const produtosLista = [
-  "Cone", "Trufa", "Bolo de pote", "Pão de mel",
-  "Escondidinho de uva", "Bombom de uva", "BomBom de morango",
-  "Coxinha de morango", "Camafeu", "Caixinha", "Mousse", "Lanche natural",
-  "Maça do amor", "Kit cesta", "Kit caneca", "Morango do amor"
-];
-
-// === TELA DE CADASTRO ===
-window.showCadastro = (usuario) => {
-  const produtoOptions = produtosLista.map((produto, index) => `
-    <div style="display: flex; align-items: center; margin-bottom: 5px;">
-      <label style="flex: 1;">${produto}</label>
-      <button onclick="alterarQuantidade(${index}, -1)">-</button>
-      <span id="quantidade-${index}" style="margin: 0 5px;">0</span>
-      <button onclick="alterarQuantidade(${index}, 1)">+</button>
-    </div>
-  `).join("");
-
-  document.getElementById("conteudo").innerHTML = `
-    <h2>Cadastro de Venda</h2>
-    <input id="cliente" placeholder="Nome do cliente" />
-    <input id="telefone" placeholder="Telefone (ex: 5599999999999)" />
-    <input id="local" placeholder="Local da venda" />
-    <input id="valor" placeholder="Valor (R$)" />
-    <div><strong>Produtos vendidos:</strong>${produtoOptions}</div>
-    <select id="status">
-      <option value="pago">Pago</option>
-      <option value="nao">Não pago</option>
-      <option value="parcial">Parcial</option>
-    </select>
-    <div id="extras"></div>
-    <button onclick="cadastrar('${usuario}')">Salvar</button>
-    <button onclick="enviarComprovante()">Enviar Comprovante via WhatsApp</button>
-  `;
-
-  // === FORMATAÇÃO DE MOEDA AUTOMÁTICA ===
-  const valorInput = document.getElementById("valor");
-  valorInput.addEventListener("input", () => {
-    let val = valorInput.value.replace(/\D/g, "");
-    val = (parseInt(val) / 100).toFixed(2);
-    valorInput.value = `R$ ${val.replace(".", ",")}`;
-  });
-
-  // === CAMPOS EXTRAS DINÂMICOS ===
-  document.getElementById("status").addEventListener("change", (e) => {
-    const val = e.target.value;
-    let html = "";
-    if (val === "pago") {
-      html = `<select id="forma"><option>dinheiro</option><option>cartão</option><option>pix</option></select>`;
-    } else if (val === "nao") {
-      html = `
-        <input type="date" id="dataReceber" />
-        <select id="forma"><option>dinheiro</option><option>cartão</option><option>pix</option></select>
-      `;
-    } else if (val === "parcial") {
-      html = `
-        <input type="number" id="valorParcial" placeholder="Valor recebido hoje" />
-        <input type="number" id="falta" placeholder="Valor que falta" />
-        <input type="date" id="dataReceber" />
-        <select id="forma"><option>dinheiro</option><option>cartão</option><option>pix</option></select>
-      `;
-    }
-    document.getElementById("extras").innerHTML = html;
-  });
-};
 // === ALTERAR QUANTIDADE DE PRODUTO ===
 window.alterarQuantidade = (index, delta) => {
   const span = document.getElementById(`quantidade-${index}`);
@@ -149,7 +19,7 @@ function obterProdutosSelecionados() {
 // === CADASTRAR VENDA ===
 window.cadastrar = async (usuario) => {
   const cliente = document.getElementById("cliente").value.trim();
-  const telefone = document.getElementById("telefone").value.trim();
+  let telefone = document.getElementById("telefone").value.trim();
   const local = document.getElementById("local").value.trim();
   const valorFormatado = document.getElementById("valor").value.trim().replace("R$ ", "").replace(".", "").replace(",", ".");
   const valor = parseFloat(valorFormatado);
@@ -160,6 +30,9 @@ window.cadastrar = async (usuario) => {
   const faltaReceber = parseFloat(document.getElementById("falta")?.value || 0);
   const data = new Date().toISOString().split("T")[0];
   const produtosSelecionados = obterProdutosSelecionados();
+
+  // Limpa telefone para ficar só números, remove espaços e caracteres estranhos
+  telefone = telefone.replace(/\D/g, "");
 
   if (!cliente || !telefone || !local || isNaN(valor) || produtosSelecionados.length === 0) {
     alert("Preencha todos os campos e selecione ao menos um produto.");
@@ -197,9 +70,10 @@ window.cadastrar = async (usuario) => {
 
   alert("Venda salva!");
 };
+
 // === ENVIAR COMPROVANTE VIA WHATSAPP ===
 window.enviarComprovante = () => {
-  const numero = document.getElementById("telefone")?.value.trim();
+  let numero = document.getElementById("telefone")?.value.trim();
   const valorCampo = document.getElementById("valor")?.value.trim();
   const cliente = document.getElementById("cliente")?.value.trim();
   const status = document.getElementById("status")?.value;
@@ -209,6 +83,14 @@ window.enviarComprovante = () => {
   if (!numero || !valorCampo || !cliente || produtosSelecionados.length === 0) {
     alert("Preencha todos os campos antes de enviar o comprovante.");
     return;
+  }
+
+  // Limpa número para ficar só dígitos
+  numero = numero.replace(/\D/g, "");
+
+  // Adiciona prefixo 55 automaticamente se não tiver
+  if (!numero.startsWith("55")) {
+    numero = "55" + numero;
   }
 
   // Remove o símbolo R$ se houver e ajusta ponto/vírgula
@@ -253,6 +135,7 @@ window.showDashboard = async () => {
     <p>Valor a receber: ${aReceber.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
   `;
 };
+
 // === COBRANÇA (INÍCIO) ===
 window.showCobranca = async () => {
   const snap = await getDocs(collection(db, "vendas"));
@@ -308,6 +191,7 @@ window.showCobranca = async () => {
     document.getElementById("calendario").innerHTML = `<div class="calendar">${calendarioHtml}</div>`;
   });
 };
+
 // === MOSTRAR COBRANÇAS DE UM DIA ===
 window.mostrarDia = (dataCompleta) => {
   const snap = localStorage.getItem("vendas");
@@ -404,6 +288,7 @@ window.marcarPagoGrupo = async (telefone, dataCompleta) => {
   mostrarDia(dataCompleta);
   showDashboard();
 };
+
 // === FORM DE PAGO PARCIAL ===
 window.marcarParcialGrupo = (telefone, dataCompleta) => {
   const div = document.getElementById(`parcial-${telefone}`);
@@ -413,7 +298,8 @@ window.marcarParcialGrupo = (telefone, dataCompleta) => {
     <button onclick="confirmarParcial('${telefone}', '${dataCompleta}')">Confirmar</button>
   `;
 };
-// === CONFIRMAR PAGO PARCIAL (CORRIGIDO PARA MOVER O GRUPO INTEIRO) ===
+
+// === CONFIRMAR PAGO PARCIAL (Atualizado para grupo) ===
 window.confirmarParcial = async (telefone, dataCompleta) => {
   const recebidoAgora = parseFloat(document.getElementById(`valorRecebido-${telefone}`).value);
   const novaData = document.getElementById(`novaDataParcial-${telefone}`).value;
@@ -464,6 +350,7 @@ window.confirmarParcial = async (telefone, dataCompleta) => {
   mostrarDia(dataCompleta);
   showDashboard();
 };
+
 // === FORM DE REAGENDAR COBRANÇA ===
 window.reagendarGrupo = (telefone, dataCompleta) => {
   const div = document.getElementById(`reagendar-${telefone}`);
@@ -472,7 +359,8 @@ window.reagendarGrupo = (telefone, dataCompleta) => {
     <button onclick="confirmarReagendar('${telefone}', '${dataCompleta}')">Confirmar</button>
   `;
 };
-// === CONFIRMAR REAGENDAMENTO (MANTÉM O GRUPO INTEIRO JUNTO) ===
+
+// === CONFIRMAR REAGENDAMENTO (Mantém grupo junto) ===
 window.confirmarReagendar = async (telefone, dataCompleta) => {
   const novaData = document.getElementById(`novaData-${telefone}`).value;
   if (!novaData) return alert("Selecione uma nova data.");
@@ -492,6 +380,7 @@ window.confirmarReagendar = async (telefone, dataCompleta) => {
   alert("Cobrança reagendada para o grupo inteiro!");
   mostrarDia(novaData);
 };
+
 // === MENSAGEM DE COBRANÇA PARA WHATSAPP (DETALHADA E COM PIX) ===
 window.cobrarWhats = (telefone, dataCompleta) => {
   const snap = JSON.parse(localStorage.getItem("vendas"));
@@ -514,6 +403,12 @@ window.cobrarWhats = (telefone, dataCompleta) => {
     .map(p => `${p}`)
     .join("\n");
 
+  // Adiciona prefixo 55 no telefone para WhatsApp
+  let numeroWhats = telefone;
+  if (!numeroWhats.startsWith("55")) {
+    numeroWhats = "55" + numeroWhats;
+  }
+
   const msg = `Olá ${nome}!, tudo bem?\n\n` +
               `💬 Estou passando para lembrar que há um valor pendente conosco:\n\n` +
               `🗓 Data agendada: ${dataAgendada}\n` +
@@ -526,9 +421,10 @@ window.cobrarWhats = (telefone, dataCompleta) => {
               `📩 Por favor, envie o comprovante após o pagamento.\n\n` +
               `— Ana Buck Doces`;
 
-  const link = `https://wa.me/${telefone}?text=${encodeURIComponent(msg)}`;
+  const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
   window.open(link, "_blank");
 };
+
 // === FUNÇÃO PARA FORMATAR DATAS NO FORMATO DD-MM-AAAA ===
 function formatarData(data) {
   if (!data) return "-";
