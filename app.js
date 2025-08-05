@@ -281,10 +281,8 @@ window.showDashboard = async () => {
   const hojeStr = hoje.toISOString().split("T")[0];
   const hojeVendas = vendas.filter(v => v.data === hojeStr);
   const totalHoje = hojeVendas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
-
   const aReceber = vendas.filter(v => v.status !== "pago")
     .reduce((acc, v) => acc + ((parseFloat(v.faltaReceber) > 0) ? parseFloat(v.faltaReceber) : 0), 0);
-
   const valorRecebido = vendas
     .filter(v => v.status === "pago" || v.status === "parcial")
     .reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
@@ -302,7 +300,7 @@ window.showDashboard = async () => {
     .map(([data, valor]) => `<li><strong>${formatarData(data)}</strong>: R$ ${valor.toFixed(2).replace(".", ",")}</li>`)
     .join("");
 
-  // === Top 10 devedores por telefone ===
+  // === Top 10 devedores (baseado em telefone) ===
   const devedores = {};
   vendas.forEach(v => {
     if (v.status !== "pago" && v.telefone) {
@@ -313,9 +311,10 @@ window.showDashboard = async () => {
   const topDevedores = Object.entries(devedores)
     .sort((a, b) => b[1].total - a[1].total)
     .slice(0, 10)
-    .map(([tel, data]) => `<li><strong>${data.nome}</strong>: R$ ${data.total.toFixed(2).replace(".", ",")}</li>`)
+    .map(([tel, data]) => `<li><strong>${data.nome}</strong> (${tel}): R$ ${data.total.toFixed(2).replace(".", ",")}</li>`)
     .join("");
 
+  // === HTML FINAL ===
   document.getElementById("conteudo").innerHTML = `
     <h2>Dashboard</h2>
     <section style="margin-bottom:20px;">
@@ -326,17 +325,17 @@ window.showDashboard = async () => {
     </section>
 
     <section style="margin-bottom:20px;">
-      <h3>📊 Dias com mais valores a receber</h3>
-      <ul style="padding-left: 20px; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;">
-        ${topDias || "<li>Nenhum resultado.</li>"}
-      </ul>
-    </section>
+      <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+        <div style="flex:1; min-width:280px; border: 1px solid #ddd; border-radius: 10px; padding: 15px; background: #fafafa;">
+          <h4>📅 Dias com mais valores a receber</h4>
+          <ul style="padding-left: 20px; margin-top:10px;">${topDias || "<li>Nenhum resultado</li>"}</ul>
+        </div>
 
-    <section style="margin-bottom:20px;">
-      <h3>🧾 Pessoas que mais devem</h3>
-      <ul style="padding-left: 20px; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;">
-        ${topDevedores || "<li>Nenhum resultado.</li>"}
-      </ul>
+        <div style="flex:1; min-width:280px; border: 1px solid #ddd; border-radius: 10px; padding: 15px; background: #fafafa;">
+          <h4>🙍‍♂️ Pessoas que mais devem</h4>
+          <ul style="padding-left: 20px; margin-top:10px;">${topDevedores || "<li>Nenhum resultado</li>"}</ul>
+        </div>
+      </div>
     </section>
 
     <section>
