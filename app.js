@@ -423,205 +423,201 @@ window.mostrarDiaDashboard = async (dataCompleta) => {
   document.getElementById("detalhesDiaDashboard").innerHTML = cards;
 };
 
-// ==== TELA DE COBRANÇA ====
-window.showCobranca = async function () {
-    const vendasRef = collection(db, "vendas");
-    const vendasSnap = await getDocs(vendasRef);
-    const vendas = vendasSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    const pendentes = vendas.filter(v => v.status !== "pago" && v.dataReceber);
-
-    const locais = [...new Set(pendentes.map(v => v.local))].sort();
+// ====================== COBRANÇA ======================
+async function showCobranca() {
     root.innerHTML = `
-        <h2>📅 Cobrança</h2>
-        <label>Selecione o Local:</label>
-        <select id="filtroLocal">
-            <option value="">--Todos--</option>
-            ${locais.map(l => `<option value="${l}">${l}</option>`).join("")}
-        </select>
-        <div id="filtroCliente"></div>
-        <div id="filtroMes"></div>
-        <div id="calendario"></div>
-        <div id="detalhesDia"></div>
+        <div class="tela">
+            <h2>Cobrança</h2>
+            <div>
+                <select id="filtroLocal">
+                    <option value="">Selecione o local</option>
+                </select>
+                <select id="filtroCliente" disabled>
+                    <option value="">Selecione o cliente</option>
+                </select>
+                <select id="filtroMes" disabled>
+                    <option value="">Selecione o mês</option>
+                </select>
+            </div>
+            <div id="calendarioCobranca"></div>
+            <div id="detalhesDia"></div>
+        </div>
     `;
 
-    document.getElementById("filtroLocal").addEventListener("change", () => {
-        const localSel = document.getElementById("filtroLocal").value;
-        const clientes = [...new Set(pendentes.filter(v => !localSel || v.local === localSel).map(v => v.cliente))].sort();
-        document.getElementById("filtroCliente").innerHTML = `
-            <label>Cliente:</label>
-            <select id="clienteSel">
-                <option value="">--Todos--</option>
-                ${clientes.map(c => `<option value="${c}">${c}</option>`).join("")}
-            </select>
-        `;
-        document.getElementById("clienteSel").addEventListener("change", () => {
-            const clienteSel = document.getElementById("clienteSel").value;
-            const meses = [...new Set(pendentes.filter(v => (!localSel || v.local === localSel) && (!clienteSel || v.cliente === clienteSel)).map(v => v.dataReceber.slice(0, 7)))].sort();
-            document.getElementById("filtroMes").innerHTML = `
-                <label>Mês:</label>
-                <select id="mesSel">
-                    ${meses.map(m => `<option value="${m}">${m}</option>`).join("")}
-                </select>
-            `;
-            document.getElementById("mesSel").addEventListener("change", () => {
-                const mesSel = document.getElementById("mesSel").value;
-                const vendasMes = pendentes.filter(v =>
-                    (!localSel || v.local === localSel) &&
-                    (!clienteSel || v.cliente === clienteSel) &&
-                    v.dataReceber.startsWith(mesSel)
-                );
+    const snap = await getDocs(collection(db, "vendas"));
+    const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                const dias = {};
-                vendasMes.forEach(v => {
-                    const dia = v.dataReceber.slice(-2);
-                    dias[dia] = (dias[dia] || 0) + v.valorTotal;
-                });
+    const pendentes = vendas.filter(v => v.status !== "pago" && v.dataReceber);
+    const locais = [...new Set(pendentes.map(v => v.local))];
+    const selLocal = document.getElementById("filtroLocal");
+    locais.forEach(l => {
+        selLocal.innerHTML += `<option value="${l}">${l}</option>`;
+    });
 
-                let calendarioHTML = `<div class="calendario-grid">`;
-                for (let d = 1; d <= 31; d++) {
-                    const diaStr = String(d).padStart(2, "0");
-                    const valor = dias[diaStr] || 0;
-                    calendarioHTML += `<div class="dia-calendario" onclick="mostrarDia('${mesSel}-${diaStr}')">
-                        ${diaStr} <br><small>${valor > 0 ? "R$" + valor.toFixed(2) : ""}</small>
-                    </div>`;
-                }
-                calendarioHTML += `</div>`;
-                document.getElementById("calendario").innerHTML = calendarioHTML;
-            });
+    selLocal.addEventListener("change", () => {
+        const local = selLocal.value;
+        const clientes = [...new Set(pendentes.filter(v => v.local === local).map(v => v.cliente))];
+        const selCliente = document.getElementById("filtroCliente");
+        selCliente.innerHTML = `<option value="">Selecione o cliente</option>`;
+        clientes.forEach(c => {
+            selCliente.innerHTML += `<option value="${c}">${c}</option>`;
         });
+        selCliente.disabled = false;
     });
-};
 
-window.mostrarDia = async function (data) {
-    const vendasRef = collection(db, "vendas");
-    const vendasSnap = await getDocs(vendasRef);
-    const vendas = vendasSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    document.getElementById("filtroCliente").addEventListener("change", () => {
+        const local = selLocal.value;
+        const cliente = document.getElementById("filtroCliente").value;
+        const meses = [...new Set(pendentes.filter(v => v.local === local && v.cliente === cliente).map(v => v.dataReceber.slice(0, 7)))];
+        const selMes = document.getElementById("filtroMes");
+        selMes.innerHTML = `<option value="">Selecione o mês</option>`;
+        meses.forEach(m => {
+            selMes.innerHTML += `<option value="${m}">${m}</option>`;
+        });
+        selMes.disabled = false;
+    });
 
-    const doDia = vendas.filter(v => v.dataReceber === data && v.status !== "pago");
+    document.getElementById("filtroMes").addEventListener("change", () => {
+        const local = selLocal.value;
+        const cliente = document.getElementById("filtroCliente").value;
+        const mes = document.getElementById("filtroMes").value;
+        const vendasMes = pendentes.filter(v => v.local === local && v.cliente === cliente && v.dataReceber.startsWith(mes));
 
-    const porCliente = {};
-    doDia.forEach(v => {
-        if (!porCliente[v.telefone]) {
-            porCliente[v.telefone] = { nome: v.cliente, vendas: [], total: 0, pago: 0 };
+        let dias = {};
+        vendasMes.forEach(v => {
+            if (!dias[v.dataReceber]) dias[v.dataReceber] = 0;
+            dias[v.dataReceber] += v.total;
+        });
+
+        let html = `<div class="calendario">`;
+        for (let dia in dias) {
+            html += `<div class="dia" onclick="mostrarDia('${local}', '${cliente}', '${dia}')">${formatarData(dia)}<br>R$ ${dias[dia].toFixed(2)}</div>`;
         }
-        porCliente[v.telefone].vendas.push(v);
-        porCliente[v.telefone].total += v.valorTotal;
-        porCliente[v.telefone].pago += v.valorPago || 0;
+        html += `</div>`;
+        document.getElementById("calendarioCobranca").innerHTML = html;
+    });
+}
+
+async function mostrarDia(local, cliente, dia) {
+    const snap = await getDocs(collection(db, "vendas"));
+    const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const vendasDia = vendas.filter(v => v.local === local && v.cliente === cliente && v.dataReceber === dia && v.status !== "pago");
+
+    let grupos = {};
+    vendasDia.forEach(v => {
+        if (!grupos[v.telefone]) grupos[v.telefone] = [];
+        grupos[v.telefone].push(v);
     });
 
-    let html = `<h3>💰 Cobranças para ${formatarData(data)}</h3>`;
-    for (let tel in porCliente) {
-        const c = porCliente[tel];
-        const falta = c.total - c.pago;
+    let html = "";
+    for (let tel in grupos) {
+        const lista = grupos[tel];
+        const totalOriginal = lista.reduce((sum, v) => sum + v.total, 0);
+        const pagoParcial = lista.reduce((sum, v) => sum + (v.pagoParcial || 0), 0);
+        const faltaPagar = totalOriginal - pagoParcial;
+
         html += `
             <div class="card-cobranca">
-                <strong>${c.nome}</strong> <br>
-                📞 ${tel} <br>
-                💵 Total: R$${c.total.toFixed(2)} | Pago: R$${c.pago.toFixed(2)} | Falta: R$${falta.toFixed(2)}
-                <div class="acoes-cobranca">
-                    <button onclick="mostrarComprasDetalhadas('${tel}', '${data}')">Ver Compras</button>
-                    <button onclick="marcarPagoGrupo('${tel}', '${data}')">Pago</button>
-                    <button onclick="marcarParcialGrupo('${tel}', '${data}')">Pago Parcial</button>
-                    <button onclick="cobrarWhats('${tel}', '${data}')">Cobrar no WhatsApp</button>
-                    <button onclick="reagendarGrupo('${tel}', '${data}')">Reagendar cobrança</button>
+                <h3>${lista[0].cliente} (${lista[0].local})</h3>
+                <p>Telefone: ${tel}</p>
+                <p>Total Original: R$ ${totalOriginal.toFixed(2)}</p>
+                <p>Pago Parcial: R$ ${pagoParcial.toFixed(2)}</p>
+                <p>Falta Pagar: R$ ${faltaPagar.toFixed(2)}</p>
+                <div class="botoes-cobranca">
+                    <button onclick="mostrarComprasDetalhadas('${tel}', '${dia}')">Ver Compras</button>
+                    <button onclick="marcarPagoGrupo('${tel}', '${dia}')">Pago</button>
+                    <button onclick="marcarParcialGrupo('${tel}', '${dia}')">Pago Parcial</button>
+                    <button onclick="cobrarWhats('${tel}', '${dia}')">Cobrar no WhatsApp</button>
+                    <button onclick="reagendarGrupo('${tel}', '${dia}')">Reagendar cobrança</button>
                 </div>
+                <div id="compras-${tel}-${dia}" class="detalhes-compras" style="display:none;"></div>
             </div>
         `;
     }
+
     document.getElementById("detalhesDia").innerHTML = html;
-};
+}
 
-// ==== FUNÇÕES DOS BOTÕES ====
-window.mostrarComprasDetalhadas = function (telefone, data) {
-    const cliente = document.querySelector(`.card-cobranca button[onclick*="${telefone}"]`).parentElement.parentElement;
-    const lista = JSON.parse(localStorage.getItem("vendasDetalhes")) || {};
-    const vendas = lista[`${telefone}_${data}`] || [];
+function formatarData(data) {
+    const [ano, mes, dia] = data.split("-");
+    return `${dia}-${mes}-${ano}`;
+}
 
-    let html = `<div class="compras-detalhadas"><ul>`;
-    vendas.forEach(v => {
-        html += `<li>${v.produto} - ${v.quantidade}x - R$${v.preco.toFixed(2)}</li>`;
+// =============== FUNÇÕES NOVAS PARA BOTÕES ===============
+async function mostrarComprasDetalhadas(tel, dia) {
+    const snap = await getDocs(collection(db, "vendas"));
+    const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const lista = vendas.filter(v => v.telefone === tel && v.dataReceber === dia && v.status !== "pago");
+
+    let html = "<ul>";
+    lista.forEach(v => {
+        html += `<li>${v.produto} - R$ ${v.total.toFixed(2)} (${v.status})</li>`;
     });
-    html += `</ul></div>`;
+    html += "</ul>";
 
-    cliente.insertAdjacentHTML("beforeend", html);
-};
+    const div = document.getElementById(`compras-${tel}-${dia}`);
+    div.innerHTML = html;
+    div.style.display = div.style.display === "none" ? "block" : "none";
+}
 
-window.marcarPagoGrupo = async function (telefone, data) {
-    const vendasRef = collection(db, "vendas");
-    const vendasSnap = await getDocs(vendasRef);
-    const vendas = vendasSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+async function marcarPagoGrupo(tel, dia) {
+    const snap = await getDocs(collection(db, "vendas"));
+    const lista = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(v => v.telefone === tel && v.dataReceber === dia && v.status !== "pago");
 
-    const doCliente = vendas.filter(v => v.telefone === telefone && v.dataReceber === data);
-    for (let v of doCliente) {
-        await updateDoc(doc(db, "vendas", v.id), { status: "pago", valorPago: v.valorTotal });
+    for (let v of lista) {
+        await updateDoc(doc(db, "vendas", v.id), { status: "pago" });
     }
-    alert("Marcado como pago!");
-    mostrarDia(data);
-};
+    alert("Cobrança marcada como paga!");
+    mostrarDia(lista[0].local, lista[0].cliente, dia);
+}
 
-window.marcarParcialGrupo = async function (telefone, data) {
-    const valorPago = parseFloat(prompt("Informe o valor pago:").replace(",", "."));
-    if (isNaN(valorPago)) return;
+async function marcarParcialGrupo(tel, dia) {
+    const valor = parseFloat(prompt("Digite o valor pago:"));
+    if (isNaN(valor) || valor <= 0) return;
 
-    const vendasRef = collection(db, "vendas");
-    const vendasSnap = await getDocs(vendasRef);
-    const vendas = vendasSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const snap = await getDocs(collection(db, "vendas"));
+    const lista = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(v => v.telefone === tel && v.dataReceber === dia && v.status !== "pago");
 
-    const doCliente = vendas.filter(v => v.telefone === telefone && v.dataReceber === data);
-    let restante = valorPago;
-
-    for (let v of doCliente) {
-        let pagoAtual = v.valorPago || 0;
-        let falta = v.valorTotal - pagoAtual;
-        let pagoAgora = Math.min(falta, restante);
-
-        await updateDoc(doc(db, "vendas", v.id), {
-            valorPago: pagoAtual + pagoAgora,
-            status: (pagoAtual + pagoAgora) >= v.valorTotal ? "pago" : "pendente"
-        });
-
-        restante -= pagoAgora;
-        if (restante <= 0) break;
+    for (let v of lista) {
+        const pagoAtual = v.pagoParcial || 0;
+        await updateDoc(doc(db, "vendas", v.id), { pagoParcial: pagoAtual + valor });
     }
     alert("Pagamento parcial registrado!");
-    mostrarDia(data);
-};
+    mostrarDia(lista[0].local, lista[0].cliente, dia);
+}
 
-window.cobrarWhats = function (telefone, data) {
-    const vendasRef = collection(db, "vendas");
-    getDocs(vendasRef).then(snap => {
-        const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const doCliente = vendas.filter(v => v.telefone === telefone && v.dataReceber === data);
+async function cobrarWhats(tel, dia) {
+    const snap = await getDocs(collection(db, "vendas"));
+    const lista = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(v => v.telefone === tel && v.dataReceber === dia && v.status !== "pago");
 
-        let msg = `Olá ${doCliente[0].cliente}, segue sua cobrança de ${formatarData(data)}:\n`;
-        let total = 0;
-        doCliente.forEach(v => {
-            msg += `- ${v.produto}: R$${v.valorTotal.toFixed(2)}\n`;
-            total += v.valorTotal;
-        });
-        msg += `\nTotal: R$${total.toFixed(2)}\nObrigado!`;
+    const total = lista.reduce((sum, v) => sum + v.total, 0);
+    const cliente = lista[0].cliente;
+    const msg = `Olá ${cliente}, lembrando da sua cobrança no valor total de R$ ${total.toFixed(2)} para ${formatarData(dia)}.`;
+    window.open(`https://wa.me/${tel.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, "_blank");
+}
 
-        window.open(`https://wa.me/55${telefone.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`, "_blank");
-    });
-};
-
-window.reagendarGrupo = async function (telefone, data) {
-    const novaData = prompt("Nova data (AAAA-MM-DD):", data);
+async function reagendarGrupo(tel, dia) {
+    const novaData = prompt("Digite a nova data (AAAA-MM-DD):");
     if (!novaData) return;
 
-    const vendasRef = collection(db, "vendas");
-    const vendasSnap = await getDocs(vendasRef);
-    const vendas = vendasSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const snap = await getDocs(collection(db, "vendas"));
+    const lista = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(v => v.telefone === tel && v.dataReceber === dia && v.status !== "pago");
 
-    const doCliente = vendas.filter(v => v.telefone === telefone && v.dataReceber === data);
-    for (let v of doCliente) {
+    for (let v of lista) {
         await updateDoc(doc(db, "vendas", v.id), { dataReceber: novaData });
     }
     alert("Cobrança reagendada!");
-    mostrarDia(novaData);
-};
-
-function formatarData(data) {
-    return data.split("-").reverse().join("-");
+    mostrarDia(lista[0].local, lista[0].cliente, novaData);
 }
+
+// deixar funções acessíveis no escopo global
+window.mostrarDia = mostrarDia;
+window.mostrarComprasDetalhadas = mostrarComprasDetalhadas;
+window.marcarPagoGrupo = marcarPagoGrupo;
+window.marcarParcialGrupo = marcarParcialGrupo;
+window.cobrarWhats = cobrarWhats;
+window.reagendarGrupo = reagendarGrupo;
