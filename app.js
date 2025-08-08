@@ -423,36 +423,101 @@ window.mostrarDiaDashboard = async (dataCompleta) => {
   document.getElementById("detalhesDiaDashboard").innerHTML = cards;
 };
 
-// === TELA DE COBRANÇA (ATUALIZADA) ===
+// === TELA DE COBRANÇA (ATUALIZADA COM LOCAL > CLIENTE > MÊS) ===
 window.showCobranca = async () => {
   const snap = await getDocs(collection(db, "vendas"));
   const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-  // Filtra vendas pendentes (status diferente de pago e com dataReceber válida)
+  // Filtra pendentes
   const pendentes = vendas.filter(v => v.status !== "pago" && v.dataReceber);
 
-  // Salva localmente para reutilização
+  // Salva para uso posterior
   localStorage.setItem("vendas", JSON.stringify(vendas));
 
+  // Monta HTML inicial
   document.getElementById("conteudo").innerHTML = `
     <h2>Cobrança</h2>
-    <input type="month" id="mesFiltro" />
+    <label>Selecione o local:</label>
+    <select id="localFiltro">
+      <option value="">-- Escolha o local --</option>
+      ${[...new Set(pendentes.map(v => v.local || "Não informado"))]
+        .map(local => `<option value="${local}">${local}</option>`).join("")}
+    </select>
+
+    <div id="clienteFiltroContainer" style="margin-top:10px; display:none;">
+      <label>Selecione o cliente:</label>
+      <select id="clienteFiltro"></select>
+    </div>
+
+    <div id="mesFiltroContainer" style="margin-top:10px; display:none;">
+      <label>Selecione o mês:</label>
+      <input type="month" id="mesFiltro" />
+    </div>
+
     <div id="calendario"></div>
     <div id="detalhesDia"></div>
   `;
 
-  // Evento para filtro por mês
+  // Filtro LOCAL
+  document.getElementById("localFiltro").addEventListener("change", e => {
+    const localSelecionado = e.target.value;
+    if (!localSelecionado) {
+      document.getElementById("clienteFiltroContainer").style.display = "none";
+      document.getElementById("mesFiltroContainer").style.display = "none";
+      document.getElementById("calendario").innerHTML = "";
+      document.getElementById("detalhesDia").innerHTML = "";
+      return;
+    }
+
+    // Lista de clientes únicos por telefone
+    const clientes = pendentes
+      .filter(v => v.local === localSelecionado)
+      .reduce((acc, v) => {
+        if (!acc.some(c => c.telefone === v.telefone)) {
+          acc.push({ nome: v.cliente, telefone: v.telefone });
+        }
+        return acc;
+      }, []);
+
+    const clienteSelect = document.getElementById("clienteFiltro");
+    clienteSelect.innerHTML = `<option value="">-- Escolha o cliente --</option>` +
+      clientes.map(c => `<option value="${c.telefone}">${c.nome} - ${c.telefone}</option>`).join("");
+
+    document.getElementById("clienteFiltroContainer").style.display = "block";
+    document.getElementById("mesFiltroContainer").style.display = "none";
+    document.getElementById("calendario").innerHTML = "";
+    document.getElementById("detalhesDia").innerHTML = "";
+  });
+
+  // Filtro CLIENTE
+  document.getElementById("clienteFiltro").addEventListener("change", e => {
+    const telefoneSelecionado = e.target.value;
+    if (!telefoneSelecionado) {
+      document.getElementById("mesFiltroContainer").style.display = "none";
+      document.getElementById("calendario").innerHTML = "";
+      document.getElementById("detalhesDia").innerHTML = "";
+      return;
+    }
+
+    document.getElementById("mesFiltroContainer").style.display = "block";
+    document.getElementById("calendario").innerHTML = "";
+    document.getElementById("detalhesDia").innerHTML = "";
+  });
+
+  // Filtro MÊS (usa seu código original adaptado para cliente)
   document.getElementById("mesFiltro").addEventListener("change", e => {
     const mes = e.target.value;
+    const telefoneSelecionado = document.getElementById("clienteFiltro").value;
+    const vendasCliente = pendentes.filter(v => v.telefone === telefoneSelecionado);
+
     if (!mes) {
       document.getElementById("calendario").innerHTML = "";
       document.getElementById("detalhesDia").innerHTML = "";
       return;
     }
 
-    // Agrupa vendas pendentes por dia do mês selecionado
     const diasDoMes = {};
-    pendentes.forEach(v => {
+    vendasCliente.forEach(v => {
       if (v.dataReceber?.startsWith(mes)) {
         const dia = v.dataReceber.split("-")[2];
         if (!diasDoMes[dia]) diasDoMes[dia] = [];
@@ -460,7 +525,6 @@ window.showCobranca = async () => {
       }
     });
 
-    // Cria calendário com valores diários (soma dos valores a receber)
     const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
       const diaStr = String(i + 1).padStart(2, "0");
       const vendasDoDia = diasDoMes[diaStr] || [];
@@ -486,11 +550,17 @@ window.showCobranca = async () => {
   });
 };
 
-// === EXIBE DETALHES DAS COBRANÇAS DE UM DIA ===
+// === EXIBE DETALHES DAS COBRANÇAS DE UM DIA (SOMENTE CLIENTE SELECIONADO) ===
 window.mostrarDia = (dataCompleta) => {
   const snap = localStorage.getItem("vendas");
   const todasVendas = JSON.parse(snap);
-  const vendasDoDia = todasVendas.filter(v => v.dataReceber === dataCompleta && v.status !== "pago");
+
+  const telefoneSelecionado = document.getElementById("clienteFiltro")?.value;
+  const vendasDoDia = todasVendas.filter(v =>
+    v.dataReceber === dataCompleta &&
+    v.status !== "pago" &&
+    (!telefoneSelecionado || v.telefone === telefoneSelecionado)
+  );
 
   if (!vendasDoDia.length) {
     document.getElementById("detalhesDia").innerHTML = "<p>Sem cobranças neste dia.</p>";
@@ -505,7 +575,6 @@ window.mostrarDia = (dataCompleta) => {
     grupos[tel].push(v);
   });
 
-  // Monta os cards para cada cliente, incluindo botão "Ver Compras"
   const cards = Object.entries(grupos).map(([telefone, vendas]) => {
     const nome = vendas[0].cliente;
 
@@ -515,17 +584,13 @@ window.mostrarDia = (dataCompleta) => {
 
     const status = vendas.every(v => v.status === "pago") ? "✅ Pago" : "🔔 Pendência";
 
-    const comprasResumoHtml = `
-      <p><strong>Total da compra:</strong> ${totalOriginal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-      <p><strong>Pago parcial:</strong> ${totalPagoParcial.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-      <p><strong>Falta pagar:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-    `;
-
     return `
       <div class="card">
         <h3>${nome} - ${telefone}</h3>
         <p><strong>Status:</strong> ${status}</p>
-        ${comprasResumoHtml}
+        <p><strong>Total da compra:</strong> ${totalOriginal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+        <p><strong>Pago parcial:</strong> ${totalPagoParcial.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+        <p><strong>Falta pagar:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
         <button onclick="mostrarComprasDetalhadas('${telefone}')">Ver Compras</button>
         <button onclick="marcarPagoGrupo('${telefone}', '${dataCompleta}')">Pago</button>
         <button onclick="marcarParcialGrupo('${telefone}', '${dataCompleta}')">Pago Parcial</button>
@@ -541,205 +606,7 @@ window.mostrarDia = (dataCompleta) => {
   document.getElementById("detalhesDia").innerHTML = `<h3>${formatarData(dataCompleta)}</h3>${cards}`;
 };
 
-// === MOSTRAR COMPRAS DETALHADAS DO CLIENTE ===
-window.mostrarComprasDetalhadas = (telefone) => {
-  const snap = JSON.parse(localStorage.getItem("vendas"));
-  const comprasCliente = snap.filter(v => v.telefone === telefone);
-
-  if (!comprasCliente.length) {
-    alert("Nenhuma compra encontrada para este cliente.");
-    return;
-  }
-
-  const container = document.getElementById(`compras-detalhadas-${telefone}`);
-  // Se já está visível, oculta; se não, mostra e preenche
-  if (container.style.display === "block") {
-    container.style.display = "none";
-    container.innerHTML = "";
-    return;
-  }
-
-  // Monta cards de compras individuais
-  const cardsCompras = comprasCliente.map(v => {
-    const produtosFormatado = (v.produtosVendidos || []).map(p => `<div>${p}</div>`).join("");
-    return `
-      <div class="compra-info" style="border:1px solid #ccc; padding:8px; margin-bottom:8px; border-radius:6px;">
-        <p><strong>Data:</strong> ${formatarData(v.data)}</p>
-        <p><strong>Local:</strong> ${v.local}</p>
-        <p><strong>Valor:</strong> ${parseFloat(v.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-        <p><strong>Status:</strong> ${v.status}</p>
-        <p><strong>Forma de Pagamento:</strong> ${v.forma || "-"}</p>
-        <p><strong>Para pagar em:</strong> ${formatarData(v.dataReceber) || "-"}</p>
-        <p><strong>Produtos:</strong><br>${produtosFormatado}</p>
-        <button onclick="marcarPagoCompra('${v.id}', '${telefone}')">Pago</button>
-        <button onclick="cobrarWhatsCompra('${v.id}', '${telefone}')">Cobrar no WhatsApp</button>
-      </div>
-    `;
-  }).join("");
-
-  // Totais da compra detalhados
-  const totalCompra = comprasCliente.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
-  const totalPago = comprasCliente.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
-  const totalFalta = comprasCliente.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
-
-  container.innerHTML = `
-    <h4>Detalhes das Compras</h4>
-    ${cardsCompras}
-    <hr>
-    <p><strong>Total geral:</strong> ${totalCompra.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-    <p><strong>Total pago:</strong> ${totalPago.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-    <p><strong>Total para receber:</strong> ${totalFalta.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-    <button onclick="pagarTudoCliente('${telefone}')">Pagar tudo</button>
-    <button onclick="mostrarFormParcialTotal('${telefone}')">Pago parcial</button>
-    <div id="parcial-total-${telefone}"></div>
-  `;
-
-  container.style.display = "block";
-};
-
-// === MARCAR PAGO COMPRA INDIVIDUAL ===
-window.marcarPagoCompra = async (idCompra, telefone) => {
-  await updateDoc(doc(db, "vendas", idCompra), {
-    status: "pago",
-    faltaReceber: 0,
-    valorParcial: (await getDoc(doc(db, "vendas", idCompra))).data().valor,
-    dataReceber: null
-  });
-
-  alert("Compra marcada como paga.");
-  // Atualiza lista compras e calendário
-  mostrarComprasDetalhadas(telefone);
-  // Atualiza calendário/mês atual se selecionado
-  const mesFiltro = document.getElementById("mesFiltro").value;
-  if (mesFiltro) mostrarDia(mesFiltro);
-};
-
-// === COBRAR WHATSAPP COMPRA INDIVIDUAL ===
-window.cobrarWhatsCompra = async (idCompra, telefone) => {
-  const docSnap = await getDoc(doc(db, "vendas", idCompra));
-  const v = docSnap.data();
-  if (!v) return alert("Compra não encontrada.");
-
-  const nome = v.cliente;
-  const dataAgendada = formatarData(v.dataReceber);
-  const dataCompra = formatarData(v.data);
-  const valorTotal = parseFloat(v.valor || 0);
-  const valorParcial = parseFloat(v.valorParcial || 0);
-  const falta = parseFloat(v.faltaReceber || valorTotal - valorParcial);
-  const listaProdutos = (v.produtosVendidos || []).map(p => `${p}`).join("\n");
-
-  let numeroWhats = telefone;
-  if (!numeroWhats.startsWith("55")) numeroWhats = "55" + numeroWhats;
-
-  const msg = `Olá ${nome}!, tudo bem?\n\n` +
-              `💬 Passando para lembrar de uma cobrança pendente:\n\n` +
-              `🗓 Data agendada: ${dataAgendada}\n` +
-              `📅 Data da compra: ${dataCompra}\n\n` +
-              `🍬 Produtos:\n${listaProdutos}\n\n` +
-              `💰 Total: R$ ${valorTotal.toFixed(2)}\n` +
-              `✅ Pago: R$ ${valorParcial.toFixed(2)}\n` +
-              `🔔 Falta: R$ ${falta.toFixed(2)}\n\n` +
-              `💳 Chave PIX:\nCNPJ 57.010.512/0001-56\n\n` +
-              `📩 Envie o comprovante por gentileza.\n\n` +
-              `— Ana Buck Doces`;
-
-  const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
-  window.open(link, "_blank");
-};
-
-// === FUNÇÃO PARA PAGAR TUDO DO CLIENTE ===
-window.pagarTudoCliente = async (telefone) => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const comprasPendentes = snap.docs.filter(doc => {
-    const v = doc.data();
-    return v.telefone === telefone && v.status !== "pago";
-  });
-
-  if (comprasPendentes.length === 0) {
-    alert("Nenhuma compra pendente para pagar.");
-    return;
-  }
-
-  for (const docRef of comprasPendentes) {
-    const v = docRef.data();
-    await updateDoc(doc(db, "vendas", docRef.id), {
-      status: "pago",
-      faltaReceber: 0,
-      valorParcial: v.valor,
-      dataReceber: null
-    });
-  }
-
-  alert("Todas as compras marcadas como pagas!");
-
-  // Atualiza visualização
-  mostrarDia(document.getElementById("mesFiltro").value + "-01");
-  mostrarComprasDetalhadas(telefone);
-};
-
-// === MOSTRAR FORMULÁRIO DE PAGAMENTO PARCIAL TOTAL ===
-window.mostrarFormParcialTotal = (telefone) => {
-  const div = document.getElementById(`parcial-total-${telefone}`);
-  div.innerHTML = `
-    <input type="number" id="valorRecebidoTotal-${telefone}" placeholder="Valor recebido agora" />
-    <input type="date" id="novaDataParcialTotal-${telefone}" />
-    <button onclick="confirmarParcialTotal('${telefone}')">Confirmar pagamento parcial</button>
-  `;
-};
-
-// === CONFIRMAR PAGAMENTO PARCIAL TOTAL ===
-window.confirmarParcialTotal = async (telefone) => {
-  const recebidoAgora = parseFloat(document.getElementById(`valorRecebidoTotal-${telefone}`).value);
-  const novaData = document.getElementById(`novaDataParcialTotal-${telefone}`).value;
-
-  if (isNaN(recebidoAgora) || recebidoAgora <= 0 || !novaData) {
-    alert("Preencha corretamente o valor e a nova data.");
-    return;
-  }
-
-  const snap = await getDocs(collection(db, "vendas"));
-  const docsGrupo = snap.docs.filter(doc => {
-    const v = doc.data();
-    return v.telefone === telefone && v.status !== "pago";
-  });
-
-  // Soma total das pendências
-  const totalFaltando = docsGrupo.reduce((acc, d) => {
-    const v = d.data();
-    return acc + (parseFloat(v.faltaReceber) > 0 ? parseFloat(v.faltaReceber) : parseFloat(v.valor));
-  }, 0);
-
-  if (recebidoAgora >= totalFaltando) {
-    // Marca tudo como pago
-    for (const docRef of docsGrupo) {
-      await updateDoc(doc(db, "vendas", docRef.id), {
-        status: "pago",
-        faltaReceber: 0,
-        valorParcial: totalFaltando,
-        dataReceber: null
-      });
-    }
-    alert("Pagamento total recebido!");
-  } else {
-    // Marca parcial e reagenda o restante
-    const restante = totalFaltando - recebidoAgora;
-    for (const docRef of docsGrupo) {
-      const v = docRef.data();
-      await updateDoc(doc(db, "vendas", docRef.id), {
-        status: "parcial",
-        valorParcial: (parseFloat(v.valorParcial) || 0) + (recebidoAgora / docsGrupo.length),
-        faltaReceber: restante / docsGrupo.length,
-        dataReceber: novaData
-      });
-    }
-    alert("Pagamento parcial registrado. Pendências reagendadas!");
-  }
-
-  mostrarDia(document.getElementById("mesFiltro").value + "-01");
-  mostrarComprasDetalhadas(telefone);
-};
-
-// === Função para formatar data no formato DD-MM-AAAA ===
+// === FUNÇÃO FORMATAR DATA ===
 function formatarData(data) {
   if (!data) return "-";
   const [ano, mes, dia] = data.split("-");
