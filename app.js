@@ -606,13 +606,6 @@ window.mostrarDia = (dataCompleta) => {
   document.getElementById("detalhesDia").innerHTML = `<h3>${formatarData(dataCompleta)}</h3>${cards}`;
 };
 
-// === FUNÇÃO FORMATAR DATA ===
-function formatarData(data) {
-  if (!data) return "-";
-  const [ano, mes, dia] = data.split("-");
-  return `${dia}-${mes}-${ano}`;
-}
-
 // ===================== FUNÇÕES DE BOTÕES DE COBRANÇA =====================
 
 // Mostrar detalhes das compras
@@ -714,3 +707,10 @@ function reagendarGrupo(telefone, data) {
             console.error("Erro ao reagendar:", err);
         });
 }
+// === FUNÇÃO FORMATAR DATA ===
+function formatarData(data) {
+  if (!data) return "-";
+  const [ano, mes, dia] = data.split("-");
+  return `${dia}-${mes}-${ano}`;
+}
+
