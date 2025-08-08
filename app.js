@@ -6,8 +6,7 @@ import {
   addDoc,
   getDocs,
   updateDoc,
-  doc,
-  getDoc // === ALTERAÇÃO: adicionei getDoc porque era usado nas funções abaixo
+  doc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -432,56 +431,29 @@ window.showCobranca = async () => {
   // Filtra vendas pendentes (status diferente de pago e com dataReceber válida)
   const pendentes = vendas.filter(v => v.status !== "pago" && v.dataReceber);
 
-  // Salva localmente para reutilização (usado por várias funções)
+  // Salva localmente para reutilização
   localStorage.setItem("vendas", JSON.stringify(vendas));
-
-  // === ALTERAÇÃO: adicionei filtros de Local e Cliente (selects) ===
-  // Monta lista de locais e clientes (clientes únicos pelo telefone)
-  const locaisUnicos = Array.from(new Set(vendas.map(v => v.local).filter(Boolean)));
-  const clientesMap = {}; // telefone -> nome
-  vendas.forEach(v => {
-    if (v.telefone) clientesMap[v.telefone] = v.cliente;
-  });
-
-  const localOptionsHtml = ['<option value="">Todos os locais</option>']
-    .concat(locaisUnicos.map(l => `<option value="${l}">${l}</option>`))
-    .join("");
-
-  const clienteOptionsHtml = ['<option value="">Filtrar por cliente</option>']
-    .concat(Object.entries(clientesMap).map(([tel, nome]) => `<option value="${tel}">${nome} - (${tel})</option>`))
-    .join("");
 
   document.getElementById("conteudo").innerHTML = `
     <h2>Cobrança</h2>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <input type="month" id="mesFiltro" style="flex:1;min-width:160px;" />
-      <select id="localFiltro" style="flex:1;min-width:160px;">${localOptionsHtml}</select>
-      <select id="clienteFiltro" style="flex:1;min-width:220px;">${clienteOptionsHtml}</select>
-    </div>
+    <input type="month" id="mesFiltro" />
     <div id="calendario"></div>
     <div id="detalhesDia"></div>
-    <div id="clienteDetalhes" style="margin-top:16px;"></div>
   `;
 
-  const mesInput = document.getElementById("mesFiltro");
-  const localSelect = document.getElementById("localFiltro");
-  const clienteSelect = document.getElementById("clienteFiltro");
-
-  // Evento para filtro por mês / local
-  const atualizarCalendario = () => {
-    const mes = mesInput.value;
-    const local = localSelect.value;
+  // Evento para filtro por mês
+  document.getElementById("mesFiltro").addEventListener("change", e => {
+    const mes = e.target.value;
     if (!mes) {
       document.getElementById("calendario").innerHTML = "";
       document.getElementById("detalhesDia").innerHTML = "";
       return;
     }
 
-    // Agrupa vendas pendentes por dia do mês selecionado e por local (se selecionado)
+    // Agrupa vendas pendentes por dia do mês selecionado
     const diasDoMes = {};
     pendentes.forEach(v => {
       if (v.dataReceber?.startsWith(mes)) {
-        if (local && v.local !== local) return; // filtra por local quando selecionado
         const dia = v.dataReceber.split("-")[2];
         if (!diasDoMes[dia]) diasDoMes[dia] = [];
         diasDoMes[dia].push(v);
@@ -511,24 +483,6 @@ window.showCobranca = async () => {
 
     document.getElementById("calendario").innerHTML = `<div class="calendar">${calendarioHtml}</div>`;
     document.getElementById("detalhesDia").innerHTML = "";
-    document.getElementById("clienteDetalhes").innerHTML = "";
-    // limpa seleção de cliente ao atualizar calendário
-    clienteSelect.value = "";
-  };
-
-  mesInput.addEventListener("change", atualizarCalendario);
-  localSelect.addEventListener("change", atualizarCalendario);
-
-  // Evento para filtro por cliente (select)
-  clienteSelect.addEventListener("change", (e) => {
-    const telefone = e.target.value;
-    document.getElementById("calendario").innerHTML = "";
-    document.getElementById("detalhesDia").innerHTML = "";
-    if (!telefone) {
-      document.getElementById("clienteDetalhes").innerHTML = "";
-      return;
-    }
-    mostrarComprasPorCliente(telefone); // === ALTERAÇÃO: mostra todas as compras do cliente selecionado
   });
 };
 
@@ -587,7 +541,7 @@ window.mostrarDia = (dataCompleta) => {
   document.getElementById("detalhesDia").innerHTML = `<h3>${formatarData(dataCompleta)}</h3>${cards}`;
 };
 
-// === MOSTRAR COMPRAS DETALHADAS DO CLIENTE (botão Ver Compras dentro do dia) ===
+// === MOSTRAR COMPRAS DETALHADAS DO CLIENTE ===
 window.mostrarComprasDetalhadas = (telefone) => {
   const snap = JSON.parse(localStorage.getItem("vendas"));
   const comprasCliente = snap.filter(v => v.telefone === telefone);
@@ -637,10 +591,6 @@ window.mostrarComprasDetalhadas = (telefone) => {
     <p><strong>Total para receber:</strong> ${totalFalta.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
     <button onclick="pagarTudoCliente('${telefone}')">Pagar tudo</button>
     <button onclick="mostrarFormParcialTotal('${telefone}')">Pago parcial</button>
-
-    <!-- === ALTERAÇÃO: botão para cobrar TODAS as compras desse cliente via WhatsApp -->
-    <button onclick="cobrarWhatsTodasComprasCliente('${telefone}')">Cobrar no WhatsApp (todas)</button>
-
     <div id="parcial-total-${telefone}"></div>
   `;
 
@@ -649,26 +599,19 @@ window.mostrarComprasDetalhadas = (telefone) => {
 
 // === MARCAR PAGO COMPRA INDIVIDUAL ===
 window.marcarPagoCompra = async (idCompra, telefone) => {
-  // busca doc atual para saber o valor real
-  const docRef = doc(db, "vendas", idCompra);
-  const docSnap = await getDoc(docRef);
-  const valorOriginal = docSnap.exists() ? docSnap.data().valor : 0;
-
-  await updateDoc(docRef, {
+  await updateDoc(doc(db, "vendas", idCompra), {
     status: "pago",
     faltaReceber: 0,
-    valorParcial: valorOriginal,
+    valorParcial: (await getDoc(doc(db, "vendas", idCompra))).data().valor,
     dataReceber: null
   });
 
   alert("Compra marcada como paga.");
   // Atualiza lista compras e calendário
-  // atualiza localStorage
-  await atualizarLocalStorageVendas();
   mostrarComprasDetalhadas(telefone);
-  // Atualiza calendário/mês atual se selecionado (tenta usar mesFiltro)
-  const mesFiltro = document.getElementById("mesFiltro")?.value;
-  if (mesFiltro) mostrarDia(mesFiltro + "-01");
+  // Atualiza calendário/mês atual se selecionado
+  const mesFiltro = document.getElementById("mesFiltro").value;
+  if (mesFiltro) mostrarDia(mesFiltro);
 };
 
 // === COBRAR WHATSAPP COMPRA INDIVIDUAL ===
@@ -729,10 +672,8 @@ window.pagarTudoCliente = async (telefone) => {
 
   alert("Todas as compras marcadas como pagas!");
 
-  // atualiza localStorage e visualizações
-  await atualizarLocalStorageVendas();
-  const mesFiltroVal = document.getElementById("mesFiltro")?.value;
-  if (mesFiltroVal) mostrarDia(mesFiltroVal + "-01");
+  // Atualiza visualização
+  mostrarDia(document.getElementById("mesFiltro").value + "-01");
   mostrarComprasDetalhadas(telefone);
 };
 
@@ -794,9 +735,7 @@ window.confirmarParcialTotal = async (telefone) => {
     alert("Pagamento parcial registrado. Pendências reagendadas!");
   }
 
-  await atualizarLocalStorageVendas();
-  const mesFiltroVal = document.getElementById("mesFiltro")?.value;
-  if (mesFiltroVal) mostrarDia(mesFiltroVal + "-01");
+  mostrarDia(document.getElementById("mesFiltro").value + "-01");
   mostrarComprasDetalhadas(telefone);
 };
 
@@ -806,367 +745,3 @@ function formatarData(data) {
   const [ano, mes, dia] = data.split("-");
   return `${dia}-${mes}-${ano}`;
 }
-
-/* =========================
-   === FUNÇÕES ADICIONADAS ===
-   Alterações mínimas para: filtro cliente (select), filtro por local, botão cobrar todas compras no detalhe,
-   e funções de grupo para que botões já presentes funcionem.
-   ========================= */
-
-// === Atualiza localStorage com as vendas mais recentes do Firestore ===
-async function atualizarLocalStorageVendas() {
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  localStorage.setItem("vendas", JSON.stringify(vendas));
-  return vendas;
-}
-
-// === Mostrar todas as compras de um cliente (quando seleciona no select de cliente) ===
-window.mostrarComprasPorCliente = (telefone) => {
-  const snap = JSON.parse(localStorage.getItem("vendas") || "[]");
-  const comprasCliente = snap.filter(v => v.telefone === telefone);
-
-  const container = document.getElementById("clienteDetalhes");
-  if (!comprasCliente.length) {
-    container.innerHTML = "<p>Nenhuma compra encontrada para este cliente.</p>";
-    return;
-  }
-
-  const cardsCompras = comprasCliente.map(v => {
-    const produtosFormatado = (v.produtosVendidos || []).map(p => `<div>${p}</div>`).join("");
-    return `
-      <div class="compra-info" style="border:1px solid #ccc; padding:8px; margin-bottom:8px; border-radius:6px;">
-        <p><strong>Data:</strong> ${formatarData(v.data)}</p>
-        <p><strong>Local:</strong> ${v.local}</p>
-        <p><strong>Valor:</strong> ${parseFloat(v.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-        <p><strong>Status:</strong> ${v.status}</p>
-        <p><strong>Forma de Pagamento:</strong> ${v.forma || "-"}</p>
-        <p><strong>Para pagar em:</strong> ${formatarData(v.dataReceber) || "-"}</p>
-        <p><strong>Produtos:</strong><br>${produtosFormatado}</p>
-        <button onclick="marcarPagoCompra('${v.id}', '${telefone}')">Pago</button>
-        <button onclick="cobrarWhatsCompra('${v.id}', '${telefone}')">Cobrar no WhatsApp</button>
-      </div>
-    `;
-  }).join("");
-
-  const totalCompra = comprasCliente.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
-  const totalPago = comprasCliente.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
-  const totalFalta = comprasCliente.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
-
-  container.innerHTML = `
-    <h3>Compras de ${comprasCliente[0].cliente} - ${telefone}</h3>
-    ${cardsCompras}
-    <hr>
-    <p><strong>Total geral:</strong> ${totalCompra.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-    <p><strong>Total pago:</strong> ${totalPago.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-    <p><strong>Total para receber:</strong> ${totalFalta.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-    <button onclick="pagarTudoCliente('${telefone}')">Pagar tudo</button>
-    <button onclick="mostrarFormParcialTotal('${telefone}')">Pago parcial</button>
-
-    <!-- Cobrar todas as compras do cliente em uma única mensagem -->
-    <button onclick="cobrarWhatsTodasComprasCliente('${telefone}')">Cobrar no WhatsApp (todas)</button>
-  `;
-};
-
-// === Compor e enviar cobrança consolidada de todas as compras de um cliente ===
-window.cobrarWhatsTodasComprasCliente = (telefone) => {
-  const vendas = JSON.parse(localStorage.getItem("vendas") || "[]");
-  // Prioriza pendentes; se não houver pendentes, pega todas as compras
-  let compras = vendas.filter(v => v.telefone === telefone && v.status !== "pago");
-  if (compras.length === 0) compras = vendas.filter(v => v.telefone === telefone);
-
-  if (compras.length === 0) {
-    alert("Nenhuma compra encontrada para este cliente.");
-    return;
-  }
-
-  const nome = compras[0].cliente || "Cliente";
-  let numeroWhats = telefone;
-  if (!numeroWhats.startsWith("55")) numeroWhats = "55" + numeroWhats;
-
-  const linhas = compras.map(v => {
-    const dataCompra = formatarData(v.data);
-    const local = v.local || "-";
-    const valor = parseFloat(v.valor || 0).toFixed(2);
-    const status = v.status || "-";
-    const dataReceber = v.dataReceber ? formatarData(v.dataReceber) : "-";
-    const produtos = (v.produtosVendidos || []).join(", ");
-    return `• ${dataCompra} | ${local} | R$ ${parseFloat(valor).toFixed(2)} | ${status} | Pagamento para: ${dataReceber}\n  Produtos: ${produtos}`;
-  }).join("\n\n");
-
-  const totalGeral = compras.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
-  const totalPago = compras.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
-  const totalFalta = compras.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
-
-  const mensagem = `Olá ${nome}!\n\nSegue o resumo das suas compras:\n\n${linhas}\n\nTotal geral: R$ ${totalGeral.toFixed(2)}\nTotal pago: R$ ${totalPago.toFixed(2)}\nTotal para receber: R$ ${totalFalta.toFixed(2)}\n\n💳 Chave PIX: CNPJ 57.010.512/0001-56\n\nPor favor, envie o comprovante após o pagamento.\n\n— Ana Buck Doces`;
-
-  const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(mensagem)}`;
-  window.open(link, "_blank");
-};
-
-/* === Funções de grupo (mínimas) para que os botões existentes funcionem === */
-
-// Marcar todas as compras do grupo (telefone + dataReceber) como pagas
-window.marcarPagoGrupo = async (telefone, dataCompleta) => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const docsGrupo = snap.docs.filter(d => {
-    const v = d.data();
-    return v.telefone === telefone && v.dataReceber === dataCompleta && v.status !== "pago";
-  });
-
-  if (!docsGrupo.length) {
-    alert("Nenhuma compra pendente nesse grupo.");
-    return;
-  }
-
-  for (const d of docsGrupo) {
-    const v = d.data();
-    await updateDoc(doc(db, "vendas", d.id), {
-      status: "pago",
-      faltaReceber: 0,
-      valorParcial: v.valor,
-      dataReceber: null
-    });
-  }
-
-  alert("Compras do grupo marcadas como pagas.");
-  await atualizarLocalStorageVendas();
-  mostrarDia(dataCompleta);
-};
-
-// Mostrar form parcial para grupo
-window.marcarParcialGrupo = (telefone, dataCompleta) => {
-  const div = document.getElementById(`parcial-${telefone}`);
-  div.innerHTML = `
-    <input type="number" id="valorParcialGrupo-${telefone}" placeholder="Valor recebido agora" />
-    <input type="date" id="dataParcialGrupo-${telefone}" />
-    <button onclick="confirmarParcialGrupo('${telefone}','${dataCompleta}')">Confirmar parcial</button>
-  `;
-};
-
-// Confirmar parcial para grupo
-window.confirmarParcialGrupo = async (telefone, dataCompleta) => {
-  const recebidoAgora = parseFloat(document.getElementById(`valorParcialGrupo-${telefone}`).value);
-  const novaData = document.getElementById(`dataParcialGrupo-${telefone}`).value;
-
-  if (isNaN(recebidoAgora) || recebidoAgora <= 0 || !novaData) {
-    alert("Preencha corretamente o valor e a nova data.");
-    return;
-  }
-
-  const snap = await getDocs(collection(db, "vendas"));
-  const docsGrupo = snap.docs.filter(d => {
-    const v = d.data();
-    return v.telefone === telefone && v.dataReceber === dataCompleta && v.status !== "pago";
-  });
-
-  if (!docsGrupo.length) {
-    alert("Nenhuma compra pendente para este grupo.");
-    return;
-  }
-
-  const totalFaltando = docsGrupo.reduce((acc, d) => {
-    const v = d.data();
-    return acc + (parseFloat(v.faltaReceber) > 0 ? parseFloat(v.faltaReceber) : parseFloat(v.valor));
-  }, 0);
-
-  if (recebidoAgora >= totalFaltando) {
-    for (const d of docsGrupo) {
-      await updateDoc(doc(db, "vendas", d.id), {
-        status: "pago",
-        faltaReceber: 0,
-        valorParcial: totalFaltando,
-        dataReceber: null
-      });
-    }
-    alert("Pagamento total do grupo recebido!");
-  } else {
-    const restante = totalFaltando - recebidoAgora;
-    for (const d of docsGrupo) {
-      const v = d.data();
-      await updateDoc(doc(db, "vendas", d.id), {
-        status: "parcial",
-        valorParcial: (parseFloat(v.valorParcial) || 0) + (recebidoAgora / docsGrupo.length),
-        faltaReceber: restante / docsGrupo.length,
-        dataReceber: novaData
-      });
-    }
-    alert("Pagamento parcial do grupo registrado e pendências reagendadas!");
-  }
-
-  await atualizarLocalStorageVendas();
-  mostrarDia(dataCompleta);
-};
-
-// Cobrar grupo específico (telefone + data)
-window.cobrarWhats = (telefone, dataCompleta) => {
-  const vendas = JSON.parse(localStorage.getItem("vendas") || "[]");
-  const compras = vendas.filter(v => v.telefone === telefone && v.dataReceber === dataCompleta && v.status !== "pago");
-
-  if (!compras.length) {
-    alert("Nenhuma cobrança pendente para este grupo nessa data.");
-    return;
-  }
-
-  const nome = compras[0].cliente || "Cliente";
-  let numeroWhats = telefone;
-  if (!numeroWhats.startsWith("55")) numeroWhats = "55" + numeroWhats;
-
-  const linhas = compras.map(v => {
-    const dataCompra = formatarData(v.data);
-    const local = v.local || "-";
-    const valor = parseFloat(v.valor || 0).toFixed(2);
-    const status = v.status || "-";
-    const dataReceber = v.dataReceber ? formatarData(v.dataReceber) : "-";
-    const produtos = (v.produtosVendidos || []).join(", ");
-    return `• ${dataCompra} | ${local} | R$ ${parseFloat(valor).toFixed(2)} | ${status} | Pagamento para: ${dataReceber}\n  Produtos: ${produtos}`;
-  }).join("\n\n");
-
-  const totalGeral = compras.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
-  const totalPago = compras.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
-  const totalFalta = compras.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
-
-  const mensagem = `Olá ${nome}!\n\nCobrança pendente para ${formatarData(dataCompleta)}:\n\n${linhas}\n\nTotal geral: R$ ${totalGeral.toFixed(2)}\nTotal pago: R$ ${totalPago.toFixed(2)}\nTotal para receber: R$ ${totalFalta.toFixed(2)}\n\n💳 Chave PIX: CNPJ 57.010.512/0001-56\n\nPor favor, envie o comprovante após o pagamento.\n\n— Ana Buck Doces`;
-
-  const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(mensagem)}`;
-  window.open(link, "_blank");
-};
-
-// Reagendar cobrança do grupo (mostra form)
-window.reagendarGrupo = (telefone, dataCompleta) => {
-  const div = document.getElementById(`reagendar-${telefone}`);
-  div.innerHTML = `
-    <input type="date" id="novaDataReagendar-${telefone}" />
-    <button onclick="confirmarReagendarGrupo('${telefone}', '${dataCompleta}')">Confirmar reagendamento</button>
-  `;
-};
-
-// Confirma reagendamento do grupo (atualiza dataReceber)
-window.confirmarReagendarGrupo = async (telefone, dataCompleta) => {
-  const novaData = document.getElementById(`novaDataReagendar-${telefone}`).value;
-  if (!novaData) {
-    alert("Escolha uma nova data.");
-    return;
-  }
-
-  const snap = await getDocs(collection(db, "vendas"));
-  const docsGrupo = snap.docs.filter(d => {
-    const v = d.data();
-    return v.telefone === telefone && v.dataReceber === dataCompleta && v.status !== "pago";
-  });
-
-  for (const d of docsGrupo) {
-    await updateDoc(doc(db, "vendas", d.id), {
-      dataReceber: novaData
-    });
-  }
-
-  alert("Reagendado com sucesso.");
-  await atualizarLocalStorageVendas();
-  mostrarDia(dataCompleta);
-};
-// Atualiza o cache localStorage com os dados mais recentes do Firestore
-async function atualizarLocalStorageVendas() {
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendas = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  localStorage.setItem("vendas", JSON.stringify(vendas));
-}
-
-// Marca pagamento parcial para o grupo inteiro
-window.marcarParcialGrupo = (telefone, dataCompleta) => {
-  const div = document.getElementById(`parcial-${telefone}`);
-  div.innerHTML = `
-    <input type="number" id="valorParcialGrupo-${telefone}" placeholder="Valor recebido agora" />
-    <input type="date" id="dataParcialGrupo-${telefone}" />
-    <button onclick="confirmarParcialGrupo('${telefone}', '${dataCompleta}')">Confirmar pagamento parcial</button>
-  `;
-};
-
-// Confirma pagamento parcial do grupo
-window.confirmarParcialGrupo = async (telefone, dataCompleta) => {
-  const recebidoAgora = parseFloat(document.getElementById(`valorParcialGrupo-${telefone}`).value);
-  const novaData = document.getElementById(`dataParcialGrupo-${telefone}`).value;
-
-  if (isNaN(recebidoAgora) || recebidoAgora <= 0 || !novaData) {
-    alert("Preencha corretamente o valor e a nova data.");
-    return;
-  }
-
-  const snap = await getDocs(collection(db, "vendas"));
-  const docsGrupo = snap.docs.filter(d => {
-    const v = d.data();
-    return v.telefone === telefone && v.dataReceber === dataCompleta && v.status !== "pago";
-  });
-
-  // Soma total das pendências do grupo
-  let totalFaltando = 0;
-  docsGrupo.forEach(d => {
-    const v = d.data();
-    totalFaltando += parseFloat(v.faltaReceber) > 0 ? parseFloat(v.faltaReceber) : parseFloat(v.valor);
-  });
-
-  if (recebidoAgora >= totalFaltando) {
-    // Marca tudo como pago
-    for (const d of docsGrupo) {
-      const v = d.data();
-      await updateDoc(doc(db, "vendas", d.id), {
-        status: "pago",
-        faltaReceber: 0,
-        valorParcial: v.valor,
-        dataReceber: null
-      });
-    }
-    alert("Pagamento total registrado!");
-  } else {
-    // Marca parcial e reagenda o restante
-    const restante = totalFaltando - recebidoAgora;
-    for (const d of docsGrupo) {
-      const v = d.data();
-      const recebidoPorCompra = (recebidoAgora / docsGrupo.length);
-      const faltaPorCompra = (restante / docsGrupo.length);
-      await updateDoc(doc(db, "vendas", d.id), {
-        status: "parcial",
-        valorParcial: (parseFloat(v.valorParcial) || 0) + recebidoPorCompra,
-        faltaReceber: faltaPorCompra,
-        dataReceber: novaData
-      });
-    }
-    alert("Pagamento parcial registrado e pendências reagendadas.");
-  }
-
-  await atualizarLocalStorageVendas();
-  mostrarDia(dataCompleta);
-};
-
-// Função para enviar cobrança no WhatsApp para o grupo
-window.cobrarWhats = (telefone, dataCompleta) => {
-  const vendas = JSON.parse(localStorage.getItem("vendas")) || [];
-  const vendasGrupo = vendas.filter(v => v.telefone === telefone && v.dataReceber === dataCompleta && v.status !== "pago");
-  if (!vendasGrupo.length) {
-    alert("Nenhuma cobrança pendente encontrada para este grupo.");
-    return;
-  }
-
-  const cliente = vendasGrupo[0].cliente || "Cliente";
-  let totalFalta = 0;
-  let listaProdutos = "";
-
-  vendasGrupo.forEach(v => {
-    totalFalta += parseFloat(v.faltaReceber) || 0;
-    listaProdutos += `- ${v.produtosVendidos?.join(", ") || "Produto"}\n`;
-  });
-
-  let numero = telefone;
-  if (!numero.startsWith("55")) numero = "55" + numero;
-
-  const mensagem = `Olá ${cliente}, tudo bem?\n\n` +
-    `Passando para lembrar das cobranças pendentes:\n\n` +
-    `Produtos:\n${listaProdutos}\n` +
-    `Total a pagar: R$ ${totalFalta.toFixed(2)}\n\n` +
-    `💳 Chave PIX (CNPJ): 57.010.512/0001-56\n` +
-    `Por favor, envie o comprovante após o pagamento.\n\n` +
-    `— Ana Buck Doces`;
-
-  const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
-  window.open(link, "_blank");
-};
