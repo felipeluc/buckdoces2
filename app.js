@@ -596,7 +596,7 @@ window.mostrarDia = (dataCompleta) => {
           <p><strong>Status:</strong> ${v.status}</p>
           <button onclick="marcarPagoCompra('${v.id}', '${telefone}')">Pago</button>
           <button onclick="marcarParcialCompra('${v.id}', '${telefone}')">Pago Parcial</button>
-          <button onclick="cobrarWhatsCompra('${v.id}', '${telefone}')">Cobrar no WhatsApp</button>
+          <button onclick="cobrarWhatsCompraDia('${telefone}', '${dataCompleta}')">Cobrar no WhatsApp</button>
         </div>
       `;
     }).join("");
@@ -743,54 +743,55 @@ window.cobrarWhatsCompra = async (idCompra, telefone) => {
                 `✅ Pago: R$ ${valorParcial.toFixed(2)}\n` +
                 `🔔 Falta: R$ ${falta.toFixed(2)}\n\n` +
                 `💳 Chave PIX:\nCNPJ 57.010.512/0001-56\n\n` +
-                `📩 Envie o comprovante por gentileza.\n\n— Ana Buck Doces`;
+                `Por favor, envie o comprovante após o pagamento.\n\n— Ana Buck Doces`;
 
     const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
     window.open(link, "_blank");
   } catch (err) {
     console.error("Erro em cobrarWhatsCompra:", err);
-    alert("Erro ao gerar cobrança WhatsApp. Veja console.");
+    alert("Erro ao gerar mensagem WhatsApp. Veja console.");
   }
 };
 
-// === FUNÇÃO PARA PAGAR TUDO DO CLIENTE ===
-window.pagarTudoCliente = async (telefone) => {
-  try {
-    const snap = await getDocs(collection(db, "vendas"));
-    const comprasPendentes = snap.docs.filter(d => {
-      const v = d.data();
-      return (v.telefone || "").replace(/\D/g, "") === telefone && v.status !== "pago";
-    });
+// === COBRAR WHATSAPP PARA UM DIA (TODAS AS COMPRAS DO CLIENTE NESTE DIA) ===
+window.cobrarWhatsCompraDia = (telefone, dataCompleta) => {
+  const snap = JSON.parse(localStorage.getItem("vendas") || "[]");
 
-    if (comprasPendentes.length === 0) {
-      alert("Nenhuma compra pendente para pagar.");
-      return;
-    }
+  const vendas = snap.filter(v =>
+    (v.telefone || "").replace(/\D/g, "") === telefone &&
+    v.dataReceber === dataCompleta &&
+    v.status !== "pago"
+  );
 
-    for (const docRef of comprasPendentes) {
-      const v = docRef.data();
-      await updateDoc(doc(db, "vendas", docRef.id), {
-        status: "pago",
-        faltaReceber: 0,
-        valorParcial: parseFloat(v.valor) || 0,
-        dataReceber: null
-      });
-    }
-
-    const snapAtual = await getDocs(collection(db, "vendas"));
-    localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
-    
-    alert("Todas as compras do cliente marcadas como pagas.");
-    mostrarComprasDetalhadas(telefone);
-    const mesFiltro = document.getElementById("mesFiltro")?.value;
-    if (mesFiltro) mostrarDia(mesFiltro + "-01");
-  } catch (err) {
-    console.error("Erro em pagarTudoCliente:", err);
-    alert("Erro ao pagar tudo. Veja console.");
+  if (vendas.length === 0) {
+    alert("Nenhuma cobrança pendente para este cliente neste dia.");
+    return;
   }
+
+  const nome = vendas[0].cliente || "Cliente";
+  let numeroWhats = telefone;
+  if (!numeroWhats.startsWith("55")) numeroWhats = "55" + numeroWhats;
+
+  const linhas = vendas.map(v => {
+    const dataCompra = formatarData(v.data || "");
+    const produtos = (v.produtosVendidos || []).join(", ");
+    const valorTotal = parseFloat(v.valor || 0);
+    const valorParcial = parseFloat(v.valorParcial || 0);
+    const falta = valorTotal - valorParcial;
+    return `📅 ${dataCompra} | Produtos: ${produtos} | Total: R$ ${valorTotal.toFixed(2)} | Pago: R$ ${valorParcial.toFixed(2)} | Falta: R$ ${falta.toFixed(2)}`;
+  }).join("\n");
+
+  const msg = `Olá ${nome}, tudo bem?\n\n` +
+              `Segue o extrato das cobranças pendentes para o dia ${formatarData(dataCompleta)}:\n\n` +
+              linhas + "\n\n" +
+              `💳 Chave PIX:\nCNPJ 57.010.512/0001-56\n\n` +
+              `Por favor, envie o comprovante após o pagamento.\n\n— Ana Buck Doces`;
+
+  const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
+  window.open(link, "_blank");
 };
 
-// === FUNÇÃO PARA EXIBIR FORMULÁRIO DE PAGAMENTO PARCIAL ===
+// === FUNÇÃO PARA EXIBIR FORMULÁRIO DE PAGAMENTO PARCIAL (CLIENTE TOTAL) ===
 window.mostrarFormParcialTotal = (telefone) => {
   const container = document.getElementById(`parcial-total-${telefone}`);
   if (container.style.display === "block") {
@@ -967,7 +968,7 @@ window.pagarParcialGrupo = async (telefone, dataCompleta) => {
     }
 
     const snapAtual = await getDocs(collection(db, "vendas"));
-    localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
+    localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() })));
 
     alert("Pagamento parcial registrado com sucesso.");
     mostrarDia(dataCompleta);
