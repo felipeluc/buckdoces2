@@ -517,6 +517,7 @@ window.showCobranca = async () => {
       return;
     }
 
+    // Pega dias do mês com vendas para aquele cliente
     const diasDoMes = {};
     vendasCliente.forEach(v => {
       if (v.dataReceber?.startsWith(mes)) {
@@ -526,43 +527,14 @@ window.showCobranca = async () => {
       }
     });
 
-    // Monta o calendário com resumo das compras do dia (produtos, total, pago parcial, falta)
+    // Monta calendário simples: só número do dia (clique para abrir detalhes)
     const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
       const diaStr = String(i + 1).padStart(2, "0");
-      const vendasDoDia = diasDoMes[diaStr] || [];
+      const temVenda = !!diasDoMes[diaStr];
 
-      if (!vendasDoDia.length) {
-        return `<div class="calendar-day" style="opacity:0.3;">${diaStr}</div>`;
-      }
-
-      // Resumo dos produtos (todos em lista única, sem repetições)
-      const produtosSet = new Set();
-      vendasDoDia.forEach(v => {
-        (v.produtosVendidos || []).forEach(p => produtosSet.add(p));
-      });
-      const produtosResumo = Array.from(produtosSet).join(", ");
-
-      // Totais
-      const totalDia = vendasDoDia.reduce((acc, v) => {
-        const falta = parseFloat(v.faltaReceber) || 0;
-        return acc + (falta > 0 ? falta : parseFloat(v.valor) || 0);
-      }, 0);
-      const totalPagoParcial = vendasDoDia.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
-      const totalFalta = totalDia - totalPagoParcial;
-
-      const valorHtml = `
-        <div class="calendar-day-value">
-          <div><strong>Produtos:</strong> ${produtosResumo}</div>
-          <div><strong>Total:</strong> ${totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
-          <div><strong>Pago parcial:</strong> ${totalPagoParcial.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
-          <div><strong>Falta pagar:</strong> ${totalFalta.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
-        </div>
-      `;
-
-      return `
-        <div class="calendar-day" onclick="mostrarDia('${mes}-${diaStr}')">
-          <div><strong>${diaStr}</strong></div>
-          ${valorHtml}
+      return `<div class="calendar-day" style="cursor:${temVenda ? "pointer" : "default"}; opacity:${temVenda ? 1 : 0.3};" 
+          onclick="${temVenda ? `mostrarDia('${mes}-${diaStr}')` : ''}">
+          ${diaStr}
         </div>`;
     }).join("");
 
@@ -599,30 +571,37 @@ window.mostrarDia = (dataCompleta) => {
   const cards = Object.entries(grupos).map(([telefone, vendas]) => {
     const nome = vendas[0].cliente || "Sem nome";
 
+    // Totais do dia para esse cliente
     const totalOriginal = vendas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
     const totalPagoParcial = vendas.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
     const faltaPagar = vendas.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
 
+    // Lista produtos do dia (todos os produtos das compras desse dia)
+    const produtosDiaSet = new Set();
+    vendas.forEach(v => (v.produtosVendidos || []).forEach(p => produtosDiaSet.add(p)));
+    const produtosDia = Array.from(produtosDiaSet).join(", ");
+
     const status = vendas.every(v => v.status === "pago") ? "✅ Pago" : "🔔 Pendência";
 
     const comprasResumoHtml = `
+      <p><strong>Produtos do dia:</strong> ${produtosDia || "-"}</p>
       <p><strong>Total da compra:</strong> ${totalOriginal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
       <p><strong>Pago parcial:</strong> ${totalPagoParcial.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
       <p><strong>Falta pagar:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
     `;
 
     return `
-      <div class="card">
+      <div class="card" style="margin-bottom:15px; padding:10px; border:1px solid #ccc; border-radius:8px;">
         <h3>${nome} - ${telefone}</h3>
         <p><strong>Status:</strong> ${status}</p>
         ${comprasResumoHtml}
         <button onclick="mostrarComprasDetalhadas('${telefone}')">Ver Compras</button>
         <button onclick="marcarPagoGrupo('${telefone}', '${dataCompleta}')">Pago</button>
         <button onclick="marcarParcialGrupo('${telefone}', '${dataCompleta}')">Pago Parcial</button>
-        <button onclick="cobrarWhats('${telefone}', '${dataCompleta}')">Cobrar no WhatsApp</button>
+        <button onclick="cobrarWhats('${telefone}', '${dataCompleta}')">Cobrar tudo no WhatsApp</button>
         <button onclick="reagendarGrupo('${telefone}', '${dataCompleta}')">Reagendar cobrança</button>
-        <div id="reagendar-${telefone}"></div>
-        <div id="parcial-${telefone}"></div>
+        <div id="reagendar-${telefone}" style="margin-top:8px;"></div>
+        <div id="parcial-${telefone}" style="margin-top:8px;"></div>
         <div id="compras-detalhadas-${telefone}" style="margin-top:10px; display:none;"></div>
       </div>
     `;
@@ -642,6 +621,7 @@ window.mostrarComprasDetalhadas = (telefone) => {
   }
 
   const container = document.getElementById(`compras-detalhadas-${telefone}`);
+
   // Se já está visível, oculta; se não, mostra e preenche
   if (container.style.display === "block") {
     container.style.display = "none";
@@ -679,9 +659,12 @@ window.mostrarComprasDetalhadas = (telefone) => {
     <p><strong>Total geral:</strong> ${totalCompra.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
     <p><strong>Total pago:</strong> ${totalPago.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
     <p><strong>Total para receber:</strong> ${totalFalta.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+
     <button onclick="pagarTudoCliente('${telefone}')">Pagar tudo</button>
     <button onclick="mostrarFormParcialTotal('${telefone}')">Pago parcial</button>
-    <div id="parcial-total-${telefone}"></div>
+    <button onclick="cobrarWhats('${telefone}')">Cobrar tudo no WhatsApp</button>
+
+    <div id="parcial-total-${telefone}" style="margin-top:10px;"></div>
   `;
 
   container.style.display = "block";
@@ -781,8 +764,7 @@ window.pagarTudoCliente = async (telefone) => {
         dataReceber: null
       });
     }
-
-    // Atualiza localStorage e interface
+// Continua função pagarTudoCliente
     const snapAtual = await getDocs(collection(db, "vendas"));
     localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
 
@@ -796,7 +778,7 @@ window.pagarTudoCliente = async (telefone) => {
   }
 };
 
-// === MOSTRAR FORM PARA PAGAMENTO PARCIAL TOTAL ===
+// === FUNÇÃO PARA EXIBIR FORMULÁRIO DE PAGAMENTO PARCIAL ===
 window.mostrarFormParcialTotal = (telefone) => {
   const container = document.getElementById(`parcial-total-${telefone}`);
   if (container.style.display === "block") {
@@ -805,21 +787,22 @@ window.mostrarFormParcialTotal = (telefone) => {
     return;
   }
 
-  container.style.display = "block";
   container.innerHTML = `
-    <label>Valor pago parcial:</label>
-    <input type="number" step="0.01" id="valorParcialTotal-${telefone}" placeholder="0,00" />
-    <button onclick="marcarParcialTotal('${telefone}')">Salvar</button>
+    <input type="number" id="valorParcialInput-${telefone}" placeholder="Valor pago parcialmente" step="0.01" min="0" style="margin-right:10px;">
+    <button onclick="pagarParcialCliente('${telefone}')">Confirmar pagamento parcial</button>
   `;
+  container.style.display = "block";
 };
 
-// === MARCAR PAGAMENTO PARCIAL TOTAL ===
-window.marcarParcialTotal = async (telefone) => {
-  const valorStr = document.getElementById(`valorParcialTotal-${telefone}`).value;
-  const valorParcial = parseFloat(valorStr);
-  if (isNaN(valorParcial) || valorParcial <= 0) {
-    alert("Informe um valor parcial válido.");
-    return;
+// === FUNÇÃO PARA PAGAR PARCIAL CLIENTE (TOTAL) ===
+window.pagarParcialCliente = async (telefone) => {
+  const input = document.getElementById(`valorParcialInput-${telefone}`);
+  if (!input || !input.value || isNaN(input.value)) {
+    return alert("Informe um valor válido para pagamento parcial.");
+  }
+  const valorPago = parseFloat(input.value);
+  if (valorPago <= 0) {
+    return alert("Valor pago deve ser maior que zero.");
   }
 
   try {
@@ -829,31 +812,72 @@ window.marcarParcialTotal = async (telefone) => {
       return (v.telefone || "").replace(/\D/g, "") === telefone && v.status !== "pago";
     });
 
-    if (!comprasPendentes.length) {
-      alert("Nenhuma compra pendente para pagamento parcial.");
+    if (comprasPendentes.length === 0) {
+      alert("Nenhuma compra pendente para pagar.");
       return;
     }
 
-    // Soma do total das compras
-    const totalGeral = comprasPendentes.reduce((acc, d) => acc + (parseFloat(d.data().valor) || 0), 0);
+    // Distribui o valorPago pelas compras em ordem
+    let valorRestante = valorPago;
 
-    if (valorParcial > totalGeral) {
-      alert("O valor parcial não pode ser maior que o total das compras pendentes.");
-      return;
-    }
-
-    // Distribui proporcionalmente valorParcial entre compras
     for (const docRef of comprasPendentes) {
       const v = docRef.data();
       const valorCompra = parseFloat(v.valor) || 0;
-      const proporcao = valorCompra / totalGeral;
-      const valorPagoParcial = valorParcial * proporcao;
-      const novaFalta = valorCompra - valorPagoParcial;
+      const valorParcialAtual = parseFloat(v.valorParcial) || 0;
+      const faltaAtual = valorCompra - valorParcialAtual;
+
+      if (valorRestante <= 0) break;
+
+      const pagoAgora = Math.min(faltaAtual, valorRestante);
+      const novoValorParcial = valorParcialAtual + pagoAgora;
+      const statusNovo = (novoValorParcial >= valorCompra) ? "pago" : "parcial";
 
       await updateDoc(doc(db, "vendas", docRef.id), {
-        status: novaFalta <= 0 ? "pago" : "pendente",
-        valorParcial: valorPagoParcial,
-        faltaReceber: novaFalta > 0 ? novaFalta : 0
+        valorParcial: novoValorParcial,
+        faltaReceber: valorCompra - novoValorParcial,
+        status: statusNovo
+      });
+
+      valorRestante -= pagoAgora;
+    }
+
+    // Atualiza localStorage e interface
+    const snapAtual = await getDocs(collection(db, "vendas"));
+    localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
+
+    alert("Pagamento parcial registrado com sucesso.");
+    mostrarComprasDetalhadas(telefone);
+    const mesFiltro = document.getElementById("mesFiltro")?.value;
+    if (mesFiltro) mostrarDia(mesFiltro + "-01");
+  } catch (err) {
+    console.error("Erro em pagarParcialCliente:", err);
+    alert("Erro ao registrar pagamento parcial. Veja console.");
+  }
+};
+
+// === MARCAR PAGO DO GRUPO POR DIA (TODAS AS VENDAS DE UM CLIENTE EM UM DIA) ===
+window.marcarPagoGrupo = async (telefone, dataCompleta) => {
+  try {
+    const snap = await getDocs(collection(db, "vendas"));
+    const vendasParaPagar = snap.docs.filter(d => {
+      const v = d.data();
+      return (v.telefone || "").replace(/\D/g, "") === telefone
+        && v.dataReceber === dataCompleta
+        && v.status !== "pago";
+    });
+
+    if (vendasParaPagar.length === 0) {
+      alert("Nenhuma compra pendente neste dia para pagar.");
+      return;
+    }
+
+    for (const docRef of vendasParaPagar) {
+      const v = docRef.data();
+      await updateDoc(doc(db, "vendas", docRef.id), {
+        status: "pago",
+        faltaReceber: 0,
+        valorParcial: parseFloat(v.valor) || 0,
+        dataReceber: null
       });
     }
 
@@ -861,184 +885,213 @@ window.marcarParcialTotal = async (telefone) => {
     const snapAtual = await getDocs(collection(db, "vendas"));
     localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
 
-    alert("Pagamento parcial salvo.");
-    mostrarComprasDetalhadas(telefone);
-    const mesFiltro = document.getElementById("mesFiltro")?.value;
-    if (mesFiltro) mostrarDia(mesFiltro + "-01");
+    alert("Compras do dia marcadas como pagas.");
+    mostrarDia(dataCompleta);
   } catch (err) {
-    console.error("Erro em marcarParcialTotal:", err);
-    alert("Erro ao salvar pagamento parcial. Veja console.");
+    console.error("Erro em marcarPagoGrupo:", err);
+    alert("Erro ao marcar pago. Veja console.");
   }
 };
 
-// === COBRAR TUDO NO WHATSAPP (EXTRATO DETALHADO) ===
-window.cobrarWhats = async (telefone, dataCompleta) => {
-  try {
-    const snap = JSON.parse(localStorage.getItem("vendas") || "[]");
-    const comprasCliente = snap.filter(v => (v.telefone || "").replace(/\D/g, "") === telefone && v.status !== "pago");
+// === MARCAR PARCIAL DO GRUPO (CLIENTE/DIA) ===
+window.marcarParcialGrupo = (telefone, dataCompleta) => {
+  const container = document.getElementById(`parcial-${telefone}`);
+  if (container.style.display === "block") {
+    container.style.display = "none";
+    container.innerHTML = "";
+    return;
+  }
 
-    if (!comprasCliente.length) {
-      alert("Nenhuma compra pendente para cobrança.");
+  container.innerHTML = `
+    <input type="number" id="valorParcialGrupo-${telefone}" placeholder="Valor pago parcialmente" step="0.01" min="0" style="margin-right:10px;">
+    <button onclick="pagarParcialGrupo('${telefone}', '${dataCompleta}')">Confirmar pagamento parcial</button>
+  `;
+  container.style.display = "block";
+};
+
+// === FUNÇÃO PARA PAGAR PARCIAL GRUPO (CLIENTE/DIA) ===
+window.pagarParcialGrupo = async (telefone, dataCompleta) => {
+  const input = document.getElementById(`valorParcialGrupo-${telefone}`);
+  if (!input || !input.value || isNaN(input.value)) {
+    return alert("Informe um valor válido para pagamento parcial.");
+  }
+  const valorPago = parseFloat(input.value);
+  if (valorPago <= 0) {
+    return alert("Valor pago deve ser maior que zero.");
+  }
+
+  try {
+    const snap = await getDocs(collection(db, "vendas"));
+    const vendasPendentes = snap.docs.filter(d => {
+      const v = d.data();
+      return (v.telefone || "").replace(/\D/g, "") === telefone
+        && v.dataReceber === dataCompleta
+        && v.status !== "pago";
+    });
+
+    if (vendasPendentes.length === 0) {
+      alert("Nenhuma compra pendente para pagar.");
       return;
     }
 
-    const nome = comprasCliente[0]?.cliente || "Cliente";
-    let numeroWhats = telefone.replace(/\D/g, "");
-    if (!numeroWhats.startsWith("55")) numeroWhats = "55" + numeroWhats;
+    let valorRestante = valorPago;
 
-    // Monta mensagem estilo extrato detalhado
-    let msg = `Olá ${nome}, tudo bem?\n\nSegue o extrato das suas compras pendentes:\n\n`;
+    for (const docRef of vendasPendentes) {
+      const v = docRef.data();
+      const valorCompra = parseFloat(v.valor) || 0;
+      const valorParcialAtual = parseFloat(v.valorParcial) || 0;
+      const faltaAtual = valorCompra - valorParcialAtual;
 
-    comprasCliente.forEach((v, idx) => {
-      const dataCompra = formatarData(v.data);
-      const produtos = (v.produtosVendidos || []).join(", ");
-      const valorTotal = parseFloat(v.valor || 0).toFixed(2);
-      const valorPagoParcial = parseFloat(v.valorParcial || 0).toFixed(2);
-      const falta = parseFloat(v.faltaReceber || (v.valor - v.valorParcial)).toFixed(2);
+      if (valorRestante <= 0) break;
 
-      msg += `${idx + 1}. Data: ${dataCompra} | Produtos: ${produtos}\n` +
-        `   Valor: R$ ${valorTotal} | Pago: R$ ${valorPagoParcial} | Falta: R$ ${falta}\n\n`;
-    });
+      const pagoAgora = Math.min(faltaAtual, valorRestante);
+      const novoValorParcial = valorParcialAtual + pagoAgora;
+      const statusNovo = (novoValorParcial >= valorCompra) ? "pago" : "parcial";
 
-    msg += `💳 Chave PIX:\nCNPJ 57.010.512/0001-56\n\n` +
-           `📩 Por favor, envie o comprovante.\n\n` +
-           `— Ana Buck Doces`;
+      await updateDoc(doc(db, "vendas", docRef.id), {
+        valorParcial: novoValorParcial,
+        faltaReceber: valorCompra - novoValorParcial,
+        status: statusNovo
+      });
 
-    const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
-    window.open(link, "_blank");
+      valorRestante -= pagoAgora;
+    }
+
+    const snapAtual = await getDocs(collection(db, "vendas"));
+    localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
+
+    alert("Pagamento parcial registrado com sucesso.");
+    mostrarDia(dataCompleta);
   } catch (err) {
-    console.error("Erro em cobrarWhats:", err);
-    alert("Erro ao gerar cobrança. Veja console.");
+    console.error("Erro em pagarParcialGrupo:", err);
+    alert("Erro ao registrar pagamento parcial. Veja console.");
   }
 };
 
-// === FORM PARA REAGENDAR COBRANÇA DO GRUPO ===
+// === FUNÇÃO DE REAGENDAR COBRANÇA (GRUPO CLIENTE/DIA) ===
 window.reagendarGrupo = (telefone, dataCompleta) => {
   const container = document.getElementById(`reagendar-${telefone}`);
+  if (container.style.display === "block") {
+    container.style.display = "none";
+    container.innerHTML = "";
+    return;
+  }
+
   container.innerHTML = `
-    <input type="date" id="novaDataReagendar-${telefone}" />
-    <button onclick="confirmarReagendarGrupo('${telefone}', '${dataCompleta}')">Confirmar</button>
-    <button onclick="cancelarReagendarGrupo('${telefone}')">Cancelar</button>
+    <input type="date" id="novaDataReagendar-${telefone}" style="margin-right:10px;" />
+    <button onclick="confirmarReagendarGrupo('${telefone}', '${dataCompleta}')">Confirmar nova data</button>
   `;
+  container.style.display = "block";
 };
 
-// === CANCELAR FORM DE REAGENDAR ===
-window.cancelarReagendarGrupo = (telefone) => {
-  const container = document.getElementById(`reagendar-${telefone}`);
-  container.innerHTML = "";
-};
-
-// === CONFIRMAR REAGENDAMENTO GRUPO ===
+// === CONFIRMAR REAGENDAMENTO ===
 window.confirmarReagendarGrupo = async (telefone, dataCompleta) => {
-  const novaData = document.getElementById(`novaDataReagendar-${telefone}`).value;
-  if (!novaData) return alert("Selecione uma data.");
-
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendasParaAtualizar = snap.docs.filter(docRef => {
-    const v = docRef.data();
-    return (v.telefone || "").replace(/\D/g, "") === telefone && v.dataReceber === dataCompleta;
-  });
-
-  for (const docRef of vendasParaAtualizar) {
-    await updateDoc(doc(db, "vendas", docRef.id), { dataReceber: novaData });
+  const input = document.getElementById(`novaDataReagendar-${telefone}`);
+  if (!input || !input.value) {
+    return alert("Informe uma nova data para reagendamento.");
   }
+  const novaData = input.value;
 
-  // Atualiza localStorage
-  const snapAtual = await getDocs(collection(db, "vendas"));
-  localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
-
-  alert("Reagendamento concluído.");
-  cancelarReagendarGrupo(telefone);
-  const mesFiltro = document.getElementById("mesFiltro")?.value;
-  if (mesFiltro) mostrarDia(mesFiltro + "-01");
-};
-
-// === FUNÇÕES PARA MARCAR PAGO E PARCIAL EM GRUPO ===
-window.marcarPagoGrupo = async (telefone, dataCompleta) => {
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendasParaAtualizar = snap.docs.filter(docRef => {
-    const v = docRef.data();
-    return (v.telefone || "").replace(/\D/g, "") === telefone && v.dataReceber === dataCompleta && v.status !== "pago";
-  });
-
-  for (const docRef of vendasParaAtualizar) {
-    const v = docRef.data();
-    await updateDoc(doc(db, "vendas", docRef.id), {
-      status: "pago",
-      faltaReceber: 0,
-      valorParcial: parseFloat(v.valor) || 0,
-      dataReceber: null
+  try {
+    const snap = await getDocs(collection(db, "vendas"));
+    const vendasParaAtualizar = snap.docs.filter(d => {
+      const v = d.data();
+      return (v.telefone || "").replace(/\D/g, "") === telefone
+        && v.dataReceber === dataCompleta
+        && v.status !== "pago";
     });
+
+    if (vendasParaAtualizar.length === 0) {
+      alert("Nenhuma cobrança para reagendar.");
+      return;
+    }
+
+    for (const docRef of vendasParaAtualizar) {
+      await updateDoc(doc(db, "vendas", docRef.id), {
+        dataReceber: novaData
+      });
+    }
+
+    // Atualiza localStorage e interface
+    const snapAtual = await getDocs(collection(db, "vendas"));
+    localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
+
+    alert("Cobranças reagendadas com sucesso.");
+    mostrarDia(novaData);
+  } catch (err) {
+    console.error("Erro em confirmarReagendarGrupo:", err);
+    alert("Erro ao reagendar. Veja console.");
+  }
+};
+
+// === FUNÇÃO DE COBRAR TUDO NO WHATSAPP (CLIENTE/DIA OU SOMENTE CLIENTE) ===
+window.cobrarWhats = (telefone, dataCompleta = null) => {
+  const snap = JSON.parse(localStorage.getItem("vendas") || "[]");
+  // Pega todas as vendas pendentes do cliente, filtrando por dataReceber se tiver
+  let vendas = snap.filter(v =>
+    (v.telefone || "").replace(/\D/g, "") === telefone &&
+    v.status !== "pago"
+  );
+
+  if (dataCompleta) {
+    vendas = vendas.filter(v => v.dataReceber === dataCompleta);
   }
 
-  // Atualiza localStorage e interface
-  const snapAtual = await getDocs(collection(db, "vendas"));
-  localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
-
-  alert("Grupo marcado como pago.");
-  mostrarDia(dataCompleta);
-};
-
-window.marcarParcialGrupo = (telefone, dataCompleta) => {
-  const container = document.getElementById(`parcial-${telefone}`);
-  container.innerHTML = `
-    <input type="number" step="0.01" id="valorParcial-${telefone}" placeholder="Valor pago parcial" />
-    <button onclick="confirmarParcialGrupo('${telefone}', '${dataCompleta}')">Confirmar</button>
-    <button onclick="cancelarParcialGrupo('${telefone}')">Cancelar</button>
-  `;
-};
-
-window.cancelarParcialGrupo = (telefone) => {
-  const container = document.getElementById(`parcial-${telefone}`);
-  container.innerHTML = "";
-};
-
-window.confirmarParcialGrupo = async (telefone, dataCompleta) => {
-  const valorStr = document.getElementById(`valorParcial-${telefone}`).value;
-  const valorParcial = parseFloat(valorStr);
-  if (isNaN(valorParcial) || valorParcial <= 0) {
-    alert("Informe um valor parcial válido.");
+  if (vendas.length === 0) {
+    alert("Nenhuma cobrança pendente para este cliente.");
     return;
   }
 
-  const snap = await getDocs(collection(db, "vendas"));
-  const vendasParaAtualizar = snap.docs.filter(docRef => {
-    const v = docRef.data();
-    return (v.telefone || "").replace(/\D/g, "") === telefone && v.dataReceber === dataCompleta && v.status !== "pago";
-  });
+  // Gera texto formatado extrato
+  const nome = vendas[0].cliente || "Cliente";
+  const numeroWhats = telefone.startsWith("55") ? telefone : "55" + telefone;
 
-  const totalDia = vendasParaAtualizar.reduce((acc, docRef) => acc + (parseFloat(docRef.data().valor) || 0), 0);
-  if (valorParcial > totalDia) {
-    alert("O valor parcial não pode ser maior que o total do dia.");
-    return;
-  }
+  // Lista resumo: uma linha por compra
+  const linhas = vendas.map(v => {
+    const dataCompra = formatarData(v.data || "");
+    const produtos = (v.produtosVendidos || []).join(", ");
+    const valorTotal = parseFloat(v.valor || 0);
+    const valorParcial = parseFloat(v.valorParcial || 0);
+    const falta = valorTotal - valorParcial;
+    return `📅 ${dataCompra} | Produtos: ${produtos} | Total: R$ ${valorTotal.toFixed(2)} | Pago: R$ ${valorParcial.toFixed(2)} | Falta: R$ ${falta.toFixed(2)}`;
+  }).join("\n");
 
-  for (const docRef of vendasParaAtualizar) {
-    const v = docRef.data();
-    const proporcao = (parseFloat(v.valor) || 0) / totalDia;
-    const valorPago = valorParcial * proporcao;
-    const novaFalta = (parseFloat(v.valor) || 0) - valorPago;
+  const msg = `Olá ${nome}, tudo bem?\n\n` +
+              `Segue o extrato das cobranças pendentes:\n\n` +
+              linhas + "\n\n" +
+              `💳 Chave PIX:\nCNPJ 57.010.512/0001-56\n\n` +
+              `Por favor, envie o comprovante após o pagamento.\n\n— Ana Buck Doces`;
 
-    await updateDoc(doc(db, "vendas", docRef.id), {
-      status: novaFalta <= 0 ? "pago" : "pendente",
-      valorParcial: valorPago,
-      faltaReceber: novaFalta > 0 ? novaFalta : 0
-    });
-  }
-
-  // Atualiza localStorage e interface
-  const snapAtual = await getDocs(collection(db, "vendas"));
-  localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
-
-  alert("Pagamento parcial do grupo salvo.");
-  cancelarParcialGrupo(telefone);
-  mostrarDia(dataCompleta);
+  const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
+  window.open(link, "_blank");
 };
 
-// === FORMATA DATA YYYY-MM-DD para DD/MM/YYYY ===
+// === FUNÇÃO AUXILIAR FORMATA DATA YYYY-MM-DD PARA DD/MM/AAAA ===
 function formatarData(data) {
   if (!data) return "";
   const partes = data.split("-");
   if (partes.length < 3) return data;
   return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }
+
+// === CSS PARA CALENDÁRIO SIMPLES (OPCIONAL) ===
+const style = document.createElement("style");
+style.innerHTML = `
+  .calendar {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+    max-width: 350px;
+  }
+  .calendar-day {
+    padding: 8px;
+    border: 1px solid #ccc;
+    text-align: center;
+    border-radius: 4px;
+    user-select: none;
+  }
+  .calendar-day:hover {
+    background: #eee;
+  }
+`;
+document.head.appendChild(style);
