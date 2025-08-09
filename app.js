@@ -527,14 +527,20 @@ window.showCobranca = async () => {
       }
     });
 
-    // Monta calendário simples: só número do dia (clique para abrir detalhes)
+    // Monta calendário simples: número do dia + valor total pendente daquele dia
     const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
       const diaStr = String(i + 1).padStart(2, "0");
-      const temVenda = !!diasDoMes[diaStr];
+      const vendasDoDia = diasDoMes[diaStr] || [];
+      const totalDia = vendasDoDia.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
+      const temVenda = vendasDoDia.length > 0;
 
-      return `<div class="calendar-day" style="cursor:${temVenda ? "pointer" : "default"}; opacity:${temVenda ? 1 : 0.3};" 
+      return `
+        <div class="calendar-day" style="cursor:${temVenda ? "pointer" : "default"}; opacity:${temVenda ? 1 : 0.3};"
           onclick="${temVenda ? `mostrarDia('${mes}-${diaStr}')` : ''}">
-          ${diaStr}
+          <div><strong>${i + 1}</strong></div>
+          <div style="font-size:0.8em; color:#444;">
+            ${temVenda ? totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : ''}
+          </div>
         </div>`;
     }).join("");
 
@@ -543,7 +549,7 @@ window.showCobranca = async () => {
   });
 };
 
-// === EXIBE DETALHES DAS COBRANÇAS DE UM DIA (SOMENTE CLIENTE SELECIONADO) ===
+// === EXIBE DETALHES DAS COBRANÇAS DE UM DIA (CLIENTE SELECIONADO) ===
 window.mostrarDia = (dataCompleta) => {
   const snap = localStorage.getItem("vendas");
   const todasVendas = JSON.parse(snap || "[]");
@@ -576,25 +582,32 @@ window.mostrarDia = (dataCompleta) => {
     const totalPagoParcial = vendas.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
     const faltaPagar = vendas.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
 
-    // Lista produtos do dia (todos os produtos das compras desse dia)
-    const produtosDiaSet = new Set();
-    vendas.forEach(v => (v.produtosVendidos || []).forEach(p => produtosDiaSet.add(p)));
-    const produtosDia = Array.from(produtosDiaSet).join(", ");
-
     const status = vendas.every(v => v.status === "pago") ? "✅ Pago" : "🔔 Pendência";
 
-    const comprasResumoHtml = `
-      <p><strong>Produtos do dia:</strong> ${produtosDia || "-"}</p>
-      <p><strong>Total da compra:</strong> ${totalOriginal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-      <p><strong>Pago parcial:</strong> ${totalPagoParcial.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-      <p><strong>Falta pagar:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-    `;
+    // Monta compras individuais dentro do card do cliente
+    const comprasHtml = vendas.map(v => {
+      const produtosHtml = (v.produtosVendidos || []).map(p => `<div>- ${p}</div>`).join("");
+      return `
+        <div style="border-top:1px solid #ccc; margin-top:8px; padding-top:6px;">
+          <p><strong>Compra ID:</strong> ${v.id}</p>
+          <p><strong>Data compra:</strong> ${formatarData(v.data)}</p>
+          <p><strong>Produtos:</strong><br>${produtosHtml || "-"}</p>
+          <p><strong>Valor total:</strong> ${parseFloat(v.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+          <p><strong>Status:</strong> ${v.status}</p>
+          <button onclick="marcarPagoCompra('${v.id}', '${telefone}')">Pago</button>
+          <button onclick="marcarParcialCompra('${v.id}', '${telefone}')">Pago Parcial</button>
+          <button onclick="cobrarWhatsCompra('${v.id}', '${telefone}')">Cobrar no WhatsApp</button>
+        </div>
+      `;
+    }).join("");
 
     return `
       <div class="card" style="margin-bottom:15px; padding:10px; border:1px solid #ccc; border-radius:8px;">
         <h3>${nome} - ${telefone}</h3>
         <p><strong>Status:</strong> ${status}</p>
-        ${comprasResumoHtml}
+        <p><strong>Total da compra:</strong> ${totalOriginal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+        <p><strong>Pago parcial:</strong> ${totalPagoParcial.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+        <p><strong>Falta pagar:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
         <button onclick="mostrarComprasDetalhadas('${telefone}')">Ver Compras</button>
         <button onclick="marcarPagoGrupo('${telefone}', '${dataCompleta}')">Pago</button>
         <button onclick="marcarParcialGrupo('${telefone}', '${dataCompleta}')">Pago Parcial</button>
@@ -610,7 +623,7 @@ window.mostrarDia = (dataCompleta) => {
   document.getElementById("detalhesDia").innerHTML = `<h3>${formatarData(dataCompleta)}</h3>${cards}`;
 };
 
-// === MOSTRAR COMPRAS DETALHADAS DO CLIENTE ===
+// === MOSTRAR COMPRAS DETALHADAS DO CLIENTE (TODAS AS COMPRAS) ===
 window.mostrarComprasDetalhadas = (telefone) => {
   const snap = JSON.parse(localStorage.getItem("vendas") || "[]");
   const comprasCliente = snap.filter(v => (v.telefone || "").replace(/\D/g, "") === telefone);
@@ -634,11 +647,11 @@ window.mostrarComprasDetalhadas = (telefone) => {
     const produtosFormatado = (v.produtosVendidos || []).map(p => `<div>${p}</div>`).join("");
     return `
       <div class="compra-info" style="border:1px solid #ccc; padding:8px; margin-bottom:8px; border-radius:6px;">
-        <p><strong>Data:</strong> ${formatarData(v.data)}</p>
+        <p><strong>Data compra:</strong> ${formatarData(v.data)}</p>
         <p><strong>Local:</strong> ${v.local}</p>
         <p><strong>Valor:</strong> ${parseFloat(v.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
         <p><strong>Status:</strong> ${v.status}</p>
-        <p><strong>Forma de Pagamento:</strong> ${v.forma || "-"}</p>
+        <p><strong>Forma de pagamento:</strong> ${v.forma || "-"}</p>
         <p><strong>Para pagar em:</strong> ${formatarData(v.dataReceber) || "-"}</p>
         <p><strong>Produtos:</strong><br>${produtosFormatado}</p>
         <button onclick="marcarPagoCompra('${v.id}', '${telefone}')">Pago</button>
@@ -730,14 +743,13 @@ window.cobrarWhatsCompra = async (idCompra, telefone) => {
                 `✅ Pago: R$ ${valorParcial.toFixed(2)}\n` +
                 `🔔 Falta: R$ ${falta.toFixed(2)}\n\n` +
                 `💳 Chave PIX:\nCNPJ 57.010.512/0001-56\n\n` +
-                `📩 Envie o comprovante por gentileza.\n\n` +
-                `— Ana Buck Doces`;
+                `📩 Envie o comprovante por gentileza.\n\n— Ana Buck Doces`;
 
     const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
     window.open(link, "_blank");
   } catch (err) {
     console.error("Erro em cobrarWhatsCompra:", err);
-    alert("Erro ao montar cobrança. Veja console.");
+    alert("Erro ao gerar cobrança WhatsApp. Veja console.");
   }
 };
 
@@ -764,10 +776,10 @@ window.pagarTudoCliente = async (telefone) => {
         dataReceber: null
       });
     }
-// Continua função pagarTudoCliente
+
     const snapAtual = await getDocs(collection(db, "vendas"));
     localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
-
+    
     alert("Todas as compras do cliente marcadas como pagas.");
     mostrarComprasDetalhadas(telefone);
     const mesFiltro = document.getElementById("mesFiltro")?.value;
@@ -817,7 +829,6 @@ window.pagarParcialCliente = async (telefone) => {
       return;
     }
 
-    // Distribui o valorPago pelas compras em ordem
     let valorRestante = valorPago;
 
     for (const docRef of comprasPendentes) {
@@ -841,10 +852,9 @@ window.pagarParcialCliente = async (telefone) => {
       valorRestante -= pagoAgora;
     }
 
-    // Atualiza localStorage e interface
     const snapAtual = await getDocs(collection(db, "vendas"));
     localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
-
+    
     alert("Pagamento parcial registrado com sucesso.");
     mostrarComprasDetalhadas(telefone);
     const mesFiltro = document.getElementById("mesFiltro")?.value;
@@ -881,10 +891,9 @@ window.marcarPagoGrupo = async (telefone, dataCompleta) => {
       });
     }
 
-    // Atualiza localStorage e interface
     const snapAtual = await getDocs(collection(db, "vendas"));
     localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
-
+    
     alert("Compras do dia marcadas como pagas.");
     mostrarDia(dataCompleta);
   } catch (err) {
@@ -1012,7 +1021,6 @@ window.confirmarReagendarGrupo = async (telefone, dataCompleta) => {
       });
     }
 
-    // Atualiza localStorage e interface
     const snapAtual = await getDocs(collection(db, "vendas"));
     localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
 
@@ -1027,7 +1035,8 @@ window.confirmarReagendarGrupo = async (telefone, dataCompleta) => {
 // === FUNÇÃO DE COBRAR TUDO NO WHATSAPP (CLIENTE/DIA OU SOMENTE CLIENTE) ===
 window.cobrarWhats = (telefone, dataCompleta = null) => {
   const snap = JSON.parse(localStorage.getItem("vendas") || "[]");
-  // Pega todas as vendas pendentes do cliente, filtrando por dataReceber se tiver
+
+  // Vendas pendentes do cliente (filtra por data se passado)
   let vendas = snap.filter(v =>
     (v.telefone || "").replace(/\D/g, "") === telefone &&
     v.status !== "pago"
@@ -1042,11 +1051,10 @@ window.cobrarWhats = (telefone, dataCompleta = null) => {
     return;
   }
 
-  // Gera texto formatado extrato
   const nome = vendas[0].cliente || "Cliente";
-  const numeroWhats = telefone.startsWith("55") ? telefone : "55" + telefone;
+  let numeroWhats = telefone;
+  if (!numeroWhats.startsWith("55")) numeroWhats = "55" + numeroWhats;
 
-  // Lista resumo: uma linha por compra
   const linhas = vendas.map(v => {
     const dataCompra = formatarData(v.data || "");
     const produtos = (v.produtosVendidos || []).join(", ");
