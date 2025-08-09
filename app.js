@@ -608,6 +608,7 @@ window.mostrarDia = (dataCompleta) => {
         <p><strong>Total da compra:</strong> ${totalOriginal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
         <p><strong>Pago parcial:</strong> ${totalPagoParcial.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
         <p><strong>Falta pagar:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+        ${comprasHtml}
         <button onclick="mostrarComprasDetalhadas('${telefone}')">Ver Compras</button>
         <button onclick="marcarPagoGrupo('${telefone}', '${dataCompleta}')">Pago</button>
         <button onclick="marcarParcialGrupo('${telefone}', '${dataCompleta}')">Pago Parcial</button>
@@ -729,21 +730,22 @@ window.cobrarWhatsCompra = async (idCompra, telefone) => {
     const valorTotal = parseFloat(v.valor || 0);
     const valorParcial = parseFloat(v.valorParcial || 0);
     const falta = parseFloat(v.faltaReceber || valorTotal - valorParcial);
-    const listaProdutos = (v.produtosVendidos || []).map(p => `${p}`).join("\n");
+    const listaProdutos = (v.produtosVendidos || []).map(p => `- ${p}`).join("\n");
 
     let numeroWhats = telefone.replace(/\D/g, "");
     if (!numeroWhats.startsWith("55")) numeroWhats = "55" + numeroWhats;
 
-    const msg = `Olá ${nome}!, tudo bem?\n\n` +
-                `💬 Passando para lembrar de uma cobrança pendente:\n\n` +
-                `🗓 Data agendada: ${dataAgendada}\n` +
-                `📅 Data da compra: ${dataCompra}\n\n` +
+    const msg = `👋 Olá ${nome}, tudo bem?\n\n` +
+                `⚠️ Você possui uma cobrança pendente:\n\n` +
+                `🛒 Compra realizada em: ${dataCompra}\n` +
+                `⏰ Vencimento: ${dataAgendada}\n\n` +
                 `🍬 Produtos:\n${listaProdutos}\n\n` +
-                `💰 Total: R$ ${valorTotal.toFixed(2)}\n` +
+                `💰 Valor total: R$ ${valorTotal.toFixed(2)}\n` +
                 `✅ Pago: R$ ${valorParcial.toFixed(2)}\n` +
-                `🔔 Falta: R$ ${falta.toFixed(2)}\n\n` +
+                `⏳ Falta pagar: R$ ${falta.toFixed(2)}\n\n` +
                 `💳 Chave PIX:\nCNPJ 57.010.512/0001-56\n\n` +
-                `Por favor, envie o comprovante após o pagamento.\n\n— Ana Buck Doces`;
+                `📩 Por favor, envie o comprovante após o pagamento.\n\n` +
+                `— Ana Buck Doces`;
 
     const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
     window.open(link, "_blank");
@@ -753,45 +755,13 @@ window.cobrarWhatsCompra = async (idCompra, telefone) => {
   }
 };
 
-// === COBRAR WHATSAPP PARA UM DIA (TODAS AS COMPRAS DO CLIENTE NESTE DIA) ===
+// === COBRAR WHATSAPP DO CLIENTE/DIA ===
 window.cobrarWhatsCompraDia = (telefone, dataCompleta) => {
-  const snap = JSON.parse(localStorage.getItem("vendas") || "[]");
-
-  const vendas = snap.filter(v =>
-    (v.telefone || "").replace(/\D/g, "") === telefone &&
-    v.dataReceber === dataCompleta &&
-    v.status !== "pago"
-  );
-
-  if (vendas.length === 0) {
-    alert("Nenhuma cobrança pendente para este cliente neste dia.");
-    return;
-  }
-
-  const nome = vendas[0].cliente || "Cliente";
-  let numeroWhats = telefone;
-  if (!numeroWhats.startsWith("55")) numeroWhats = "55" + numeroWhats;
-
-  const linhas = vendas.map(v => {
-    const dataCompra = formatarData(v.data || "");
-    const produtos = (v.produtosVendidos || []).join(", ");
-    const valorTotal = parseFloat(v.valor || 0);
-    const valorParcial = parseFloat(v.valorParcial || 0);
-    const falta = valorTotal - valorParcial;
-    return `📅 ${dataCompra} | Produtos: ${produtos} | Total: R$ ${valorTotal.toFixed(2)} | Pago: R$ ${valorParcial.toFixed(2)} | Falta: R$ ${falta.toFixed(2)}`;
-  }).join("\n");
-
-  const msg = `Olá ${nome}, tudo bem?\n\n` +
-              `Segue o extrato das cobranças pendentes para o dia ${formatarData(dataCompleta)}:\n\n` +
-              linhas + "\n\n" +
-              `💳 Chave PIX:\nCNPJ 57.010.512/0001-56\n\n` +
-              `Por favor, envie o comprovante após o pagamento.\n\n— Ana Buck Doces`;
-
-  const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
-  window.open(link, "_blank");
+  // Reaproveita função cobrarWhats
+  window.cobrarWhats(telefone, dataCompleta);
 };
 
-// === FUNÇÃO PARA EXIBIR FORMULÁRIO DE PAGAMENTO PARCIAL (CLIENTE TOTAL) ===
+// === FUNÇÃO PARA EXIBIR FORMULÁRIO DE PAGAMENTO PARCIAL (TOTAL CLIENTE) ===
 window.mostrarFormParcialTotal = (telefone) => {
   const container = document.getElementById(`parcial-total-${telefone}`);
   if (container.style.display === "block") {
@@ -855,7 +825,7 @@ window.pagarParcialCliente = async (telefone) => {
 
     const snapAtual = await getDocs(collection(db, "vendas"));
     localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
-    
+
     alert("Pagamento parcial registrado com sucesso.");
     mostrarComprasDetalhadas(telefone);
     const mesFiltro = document.getElementById("mesFiltro")?.value;
@@ -894,7 +864,7 @@ window.marcarPagoGrupo = async (telefone, dataCompleta) => {
 
     const snapAtual = await getDocs(collection(db, "vendas"));
     localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
-    
+
     alert("Compras do dia marcadas como pagas.");
     mostrarDia(dataCompleta);
   } catch (err) {
@@ -968,8 +938,8 @@ window.pagarParcialGrupo = async (telefone, dataCompleta) => {
     }
 
     const snapAtual = await getDocs(collection(db, "vendas"));
-    localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() })));
-
+    localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
+    
     alert("Pagamento parcial registrado com sucesso.");
     mostrarDia(dataCompleta);
   } catch (err) {
@@ -1024,7 +994,7 @@ window.confirmarReagendarGrupo = async (telefone, dataCompleta) => {
 
     const snapAtual = await getDocs(collection(db, "vendas"));
     localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
-
+    
     alert("Cobranças reagendadas com sucesso.");
     mostrarDia(novaData);
   } catch (err) {
