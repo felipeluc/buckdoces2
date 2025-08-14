@@ -606,11 +606,10 @@ window.mostrarDia = (dataCompleta) => {
   document.getElementById("detalhesDia").innerHTML = `<h3>${formatarData(dataCompleta)}</h3>${cards}`;
 };
 
-// === NOVA FUNÇÃO: COBRAR WHATSAPP (COMPRAS DO DIA) ===
+// === [NOVA FUNÇÃO] COBRAR WHATSAPP (COMPRAS DO DIA) ===
 window.cobrarWhatsCompraDoDia = (telefone, dataCompleta) => {
   const snap = JSON.parse(localStorage.getItem("vendas") || "[]");
 
-  // Filtra apenas as vendas pendentes do cliente para a data específica
   const vendasDoDia = snap.filter(v =>
     (v.telefone || "").replace(/\D/g, "") === telefone &&
     v.dataReceber === dataCompleta &&
@@ -624,17 +623,8 @@ window.cobrarWhatsCompraDoDia = (telefone, dataCompleta) => {
 
   const nome = vendasDoDia[0].cliente || "Cliente";
   const dataAgendada = formatarData(dataCompleta);
-
-  // Agrupa as datas das compras originais
   const datasCompras = [...new Set(vendasDoDia.map(v => formatarData(v.data)))].join(' | ');
-
-  // Agrupa todos os produtos
-  const listaProdutos = vendasDoDia
-    .flatMap(v => v.produtosVendidos || [])
-    .map(p => `${p}`)
-    .join("\n");
-
-  // Calcula totais
+  const listaProdutos = vendasDoDia.flatMap(v => v.produtosVendidos || []).map(p => `${p}`).join("\n");
   const totalCompra = vendasDoDia.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
   const valorRecebido = vendasDoDia.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
   const faltaPagar = totalCompra - valorRecebido;
@@ -658,7 +648,6 @@ window.cobrarWhatsCompraDoDia = (telefone, dataCompleta) => {
   window.open(link, "_blank");
 };
 
-
 // === MOSTRAR COMPRAS DETALHADAS DO CLIENTE (TODAS AS COMPRAS) ===
 window.mostrarComprasDetalhadas = (telefone) => {
   const snap = JSON.parse(localStorage.getItem("vendas") || "[]");
@@ -671,14 +660,12 @@ window.mostrarComprasDetalhadas = (telefone) => {
 
   const container = document.getElementById(`compras-detalhadas-${telefone}`);
 
-  // Se já está visível, oculta; se não, mostra e preenche
   if (container.style.display === "block") {
     container.style.display = "none";
     container.innerHTML = "";
     return;
   }
 
-  // === Monta cards de compras individuais (completa) ===
   const cardsCompras = comprasCliente.map(v => {
     const produtosFormatado = (v.produtosVendidos || []).map(p => `<div>${p}</div>`).join("");
     return `
@@ -697,7 +684,6 @@ ${produtosFormatado}</p>
     `;
   }).join("");
 
-  // Totais detalhados da compra
   const totalCompra = comprasCliente.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
   const totalPago = comprasCliente.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
   const totalFalta = comprasCliente.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
@@ -725,7 +711,6 @@ window.marcarPagoCompra = async (idCompra, telefone) => {
   try {
     const docRef = doc(db, "vendas", idCompra);
     const docSnap = await getDoc(docRef);
-
     if (!docSnap.exists()) return alert("Compra não encontrada.");
 
     const v = docSnap.data();
@@ -738,15 +723,13 @@ window.marcarPagoCompra = async (idCompra, telefone) => {
       dataReceber: null
     });
 
-    // atualiza localStorage
     const snap2 = await getDocs(collection(db, "vendas"));
     localStorage.setItem("vendas", JSON.stringify(snap2.docs.map(d => ({ id: d.id, ...d.data() }))));
 
     alert("Compra marcada como paga.");
-    // Atualiza a visualização
     document.getElementById("mesFiltro").dispatchEvent(new Event('change'));
     if (document.getElementById(`compras-detalhadas-${telefone}`).style.display === 'block') {
-        mostrarComprasDetalhadas(telefone); // Recarrega se estiver aberto
+        mostrarComprasDetalhadas(telefone);
     }
   } catch (err) {
     console.error("Erro em marcarPagoCompra:", err);
@@ -759,7 +742,6 @@ window.cobrarWhatsCompra = async (idCompra, telefone) => {
   try {
     const docRef = doc(db, "vendas", idCompra);
     const docSnap = await getDoc(docRef);
-
     if (!docSnap.exists()) return alert("Compra não encontrada.");
     const v = docSnap.data();
 
@@ -1062,18 +1044,16 @@ window.confirmarReagendarGrupo = async (telefone, dataCompleta) => {
 
     alert("Cobranças reagendadas com sucesso.");
     document.getElementById("mesFiltro").dispatchEvent(new Event('change'));
-    mostrarDia(dataCompleta); // Esconde o card antigo
   } catch (err) {
     console.error("Erro em confirmarReagendarGrupo:", err);
     alert("Erro ao reagendar. Veja console.");
   }
 };
 
-// === FUNÇÃO DE COBRAR TUDO NO WHATSAPP (CLIENTE/DIA OU SOMENTE CLIENTE) ===
+// === FUNÇÃO DE COBRAR TUDO NO WHATSAPP (MENSAGEM ATUALIZADA) ===
 window.cobrarWhats = (telefone, dataCompleta = null) => {
   const snap = JSON.parse(localStorage.getItem("vendas") || "[]");
 
-  // Vendas pendentes do cliente (filtra por data se passado)
   let vendas = snap.filter(v =>
     (v.telefone || "").replace(/\D/g, "") === telefone &&
     v.status !== "pago"
@@ -1089,7 +1069,6 @@ window.cobrarWhats = (telefone, dataCompleta = null) => {
   }
 
   const nome = vendas[0].cliente || "Cliente";
-  let numeroWhats = telefone.replace(/\D/g, "");
-  if (!numeroWhats.startsWith("55")) numeroWhats = "55" + numeroWhats;
-
-  const dataAgendada = dataCompleta ? formatarData(dataCompleta) : "V
+  const dataAgendada = dataCompleta ? formatarData(dataCompleta) : "Várias datas";
+  const datasCompras = [...new Set(vendas.map(v => formatarData(v.data)))].join(' | ');
+  
