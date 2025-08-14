@@ -474,7 +474,7 @@ window.showCobranca = async () => {
       .filter(v => v.local === localSelecionado)
       .reduce((acc, v) => {
         const tel = (v.telefone || "").replace(/\D/g, "");
-        if (tel && !acc.some(c => c.telefone === tel)) {
+        if (!acc.some(c => c.telefone === tel)) {
           acc.push({ nome: v.cliente, telefone: tel });
         }
         return acc;
@@ -584,6 +584,23 @@ window.mostrarDia = (dataCompleta) => {
 
     const status = vendas.every(v => v.status === "pago") ? "✅ Pago" : "🔔 Pendência";
 
+    // Monta compras individuais dentro do card do cliente
+    const comprasHtml = vendas.map(v => {
+      const produtosHtml = (v.produtosVendidos || []).map(p => `<div>- ${p}</div>`).join("");
+      return `
+        <div style="border-top:1px solid #ccc; margin-top:8px; padding-top:6px;">
+          <p><strong>Compra ID:</strong> ${v.id}</p>
+          <p><strong>Data compra:</strong> ${formatarData(v.data)}</p>
+          <p><strong>Produtos:</strong><br>${produtosHtml || "-"}</p>
+          <p><strong>Valor total:</strong> ${parseFloat(v.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+          <p><strong>Status:</strong> ${v.status}</p>
+          <button onclick="marcarPagoCompra('${v.id}', '${telefone}')">Pago</button>
+          <button onclick="marcarParcialCompra('${v.id}', '${telefone}')">Pago Parcial</button>
+          <button onclick="cobrarWhatsCompra('${v.id}', '${telefone}')">Cobrar no WhatsApp</button>
+        </div>
+      `;
+    }).join("");
+
     return `
       <div class="card" style="margin-bottom:15px; padding:10px; border:1px solid #ccc; border-radius:8px;">
         <h3>${nome} - ${telefone}</h3>
@@ -594,7 +611,7 @@ window.mostrarDia = (dataCompleta) => {
         <button onclick="mostrarComprasDetalhadas('${telefone}')">Ver Compras</button>
         <button onclick="marcarPagoGrupo('${telefone}', '${dataCompleta}')">Pago</button>
         <button onclick="marcarParcialGrupo('${telefone}', '${dataCompleta}')">Pago Parcial</button>
-        <button onclick="cobrarWhatsCompraDoDia('${telefone}', '${dataCompleta}')">Cobrar essa compra no WhatsApp</button>
+        <button onclick="cobrarWhats('${telefone}', '${dataCompleta}')">Cobrar tudo no WhatsApp</button>
         <button onclick="reagendarGrupo('${telefone}', '${dataCompleta}')">Reagendar cobrança</button>
         <div id="reagendar-${telefone}" style="margin-top:8px;"></div>
         <div id="parcial-${telefone}" style="margin-top:8px;"></div>
@@ -604,48 +621,6 @@ window.mostrarDia = (dataCompleta) => {
   }).join("");
 
   document.getElementById("detalhesDia").innerHTML = `<h3>${formatarData(dataCompleta)}</h3>${cards}`;
-};
-
-// === [NOVA FUNÇÃO] COBRAR WHATSAPP (COMPRAS DO DIA) ===
-window.cobrarWhatsCompraDoDia = (telefone, dataCompleta) => {
-  const snap = JSON.parse(localStorage.getItem("vendas") || "[]");
-
-  const vendasDoDia = snap.filter(v =>
-    (v.telefone || "").replace(/\D/g, "") === telefone &&
-    v.dataReceber === dataCompleta &&
-    v.status !== "pago"
-  );
-
-  if (vendasDoDia.length === 0) {
-    alert("Nenhuma cobrança pendente para este cliente neste dia.");
-    return;
-  }
-
-  const nome = vendasDoDia[0].cliente || "Cliente";
-  const dataAgendada = formatarData(dataCompleta);
-  const datasCompras = [...new Set(vendasDoDia.map(v => formatarData(v.data)))].join(' | ');
-  const listaProdutos = vendasDoDia.flatMap(v => v.produtosVendidos || []).map(p => `${p}`).join("\n");
-  const totalCompra = vendasDoDia.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
-  const valorRecebido = vendasDoDia.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
-  const faltaPagar = totalCompra - valorRecebido;
-
-  let numeroWhats = telefone.replace(/\D/g, "");
-  if (!numeroWhats.startsWith("55")) numeroWhats = "55" + numeroWhats;
-
-  const msg = `Olá ${nome}!, tudo bem?\n\n` +
-              `👋 Estou passando para lembrar que há um valor pendente conosco:\n\n` +
-              `🗓️ Data agendada: ${dataAgendada}\n` +
-              `🛍️ Datas das compras: ${datasCompras}\n\n` +
-              `🍫 Produtos:\n${listaProdutos}\n\n` +
-              `💰 Total da compra: ${totalCompra.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}\n` +
-              `✅ Valor recebido: ${valorRecebido.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}\n` +
-              `🔔 Falta pagar: ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}\n\n` +
-              `🔑 Chave PIX para pagamento:\nCNPJ 57.010.512/0001-56\n\n` +
-              `🧾 Por favor, envie o comprovante após o pagamento.\n\n` +
-              `— Ana Buck Doces`;
-
-  const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg )}`;
-  window.open(link, "_blank");
 };
 
 // === MOSTRAR COMPRAS DETALHADAS DO CLIENTE (TODAS AS COMPRAS) ===
@@ -666,6 +641,7 @@ window.mostrarComprasDetalhadas = (telefone) => {
     return;
   }
 
+  // === Monta cards de compras individuais (completa) ===
   const cardsCompras = comprasCliente.map(v => {
     const produtosFormatado = (v.produtosVendidos || []).map(p => `<div>${p}</div>`).join("");
     return `
@@ -676,14 +652,14 @@ window.mostrarComprasDetalhadas = (telefone) => {
         <p><strong>Status:</strong> ${v.status}</p>
         <p><strong>Forma de pagamento:</strong> ${v.forma || "-"}</p>
         <p><strong>Para pagar em:</strong> ${formatarData(v.dataReceber) || "-"}</p>
-        <p><strong>Produtos:</strong>  
-${produtosFormatado}</p>
+        <p><strong>Produtos:</strong><br>${produtosFormatado}</p>
         <button onclick="marcarPagoCompra('${v.id}', '${telefone}')">Pago</button>
         <button onclick="cobrarWhatsCompra('${v.id}', '${telefone}')">Cobrar no WhatsApp</button>
       </div>
     `;
   }).join("");
 
+  // Totais detalhados da compra
   const totalCompra = comprasCliente.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
   const totalPago = comprasCliente.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
   const totalFalta = comprasCliente.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
@@ -706,69 +682,37 @@ ${produtosFormatado}</p>
   container.style.display = "block";
 };
 
-// === MARCAR PAGO COMPRA INDIVIDUAL ===
-window.marcarPagoCompra = async (idCompra, telefone) => {
-  try {
-    const docRef = doc(db, "vendas", idCompra);
-    const docSnap = await getDoc(docRef);
-    if (!docSnap.exists()) return alert("Compra não encontrada.");
-
-    const v = docSnap.data();
-    const valor = parseFloat(v.valor || 0);
-
-    await updateDoc(docRef, {
-      status: "pago",
-      faltaReceber: 0,
-      valorParcial: valor,
-      dataReceber: null
-    });
-
-    const snap2 = await getDocs(collection(db, "vendas"));
-    localStorage.setItem("vendas", JSON.stringify(snap2.docs.map(d => ({ id: d.id, ...d.data() }))));
-
-    alert("Compra marcada como paga.");
-    document.getElementById("mesFiltro").dispatchEvent(new Event('change'));
-    if (document.getElementById(`compras-detalhadas-${telefone}`).style.display === 'block') {
-        mostrarComprasDetalhadas(telefone);
-    }
-  } catch (err) {
-    console.error("Erro em marcarPagoCompra:", err);
-    alert("Erro ao marcar compra como paga. Veja console.");
-  }
-};
-
-// === COBRAR WHATSAPP COMPRA INDIVIDUAL (MENSAGEM ATUALIZADA) ===
+// === COBRAR WHATSAPP COMPRA INDIVIDUAL ===
 window.cobrarWhatsCompra = async (idCompra, telefone) => {
   try {
-    const docRef = doc(db, "vendas", idCompra);
-    const docSnap = await getDoc(docRef);
-    if (!docSnap.exists()) return alert("Compra não encontrada.");
-    const v = docSnap.data();
+    const snap = await getDocs(collection(db, "vendas"));
+    const docRef = snap.docs.find(d => d.id === idCompra);
+    if (!docRef) return alert("Compra não encontrada.");
+    const v = docRef.data();
 
     const nome = v.cliente;
     const dataAgendada = formatarData(v.dataReceber);
     const dataCompra = formatarData(v.data);
     const valorTotal = parseFloat(v.valor || 0);
     const valorParcial = parseFloat(v.valorParcial || 0);
-    const faltaPagar = parseFloat(v.faltaReceber || valorTotal - valorParcial);
-    const listaProdutos = (v.produtosVendidos || []).map(p => `${p}`).join("\n");
+    const falta = parseFloat(v.faltaReceber || valorTotal - valorParcial);
+    const listaProdutos = (v.produtosVendidos || []).map(p => `🍬 ${p}`).join("\n");
 
     let numeroWhats = telefone.replace(/\D/g, "");
     if (!numeroWhats.startsWith("55")) numeroWhats = "55" + numeroWhats;
 
     const msg = `Olá ${nome}!, tudo bem?\n\n` +
-                `👋 Estou passando para lembrar que há um valor pendente conosco:\n\n` +
-                `🗓️ Data agendada: ${dataAgendada}\n` +
-                `🛍️ Datas das compras: ${dataCompra}\n\n` +
-                `🍫 Produtos:\n${listaProdutos}\n\n` +
-                `💰 Total da compra: ${valorTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}\n` +
-                `✅ Valor recebido: ${valorParcial.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}\n` +
-                `🔔 Falta pagar: ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}\n\n` +
-                `🔑 Chave PIX para pagamento:\nCNPJ 57.010.512/0001-56\n\n` +
-                `🧾 Por favor, envie o comprovante após o pagamento.\n\n` +
-                `— Ana Buck Doces`;
+                `💬 Passando para lembrar de uma cobrança pendente:\n\n` +
+                `🗓 Data agendada: ${dataAgendada}\n` +
+                `📅 Data da compra: ${dataCompra}\n\n` +
+                `🍬 Produtos:\n${listaProdutos}\n\n` +
+                `💰 Total: R$ ${valorTotal.toFixed(2)}\n` +
+                `✅ Pago: R$ ${valorParcial.toFixed(2)}\n` +
+                `🔔 Falta: R$ ${falta.toFixed(2)}\n\n` +
+                `💳 Chave PIX:\nCNPJ 57.010.512/0001-56\n\n` +
+                `📩 Envie o comprovante por gentileza.\n\n— Ana Buck Doces`;
 
-    const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg )}`;
+    const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
     window.open(link, "_blank");
   } catch (err) {
     console.error("Erro em cobrarWhatsCompra:", err);
@@ -779,32 +723,34 @@ window.cobrarWhatsCompra = async (idCompra, telefone) => {
 // === FUNÇÃO PARA PAGAR TUDO DO CLIENTE ===
 window.pagarTudoCliente = async (telefone) => {
   try {
-    const q = query(collection(db, "vendas"), where("telefone", "==", telefone), where("status", "!=", "pago"));
-    const querySnapshot = await getDocs(q);
+    const snap = await getDocs(collection(db, "vendas"));
+    const comprasPendentes = snap.docs.filter(d => {
+      const v = d.data();
+      return (v.telefone || "").replace(/\D/g, "") === telefone && v.status !== "pago";
+    });
 
-    if (querySnapshot.empty) {
+    if (comprasPendentes.length === 0) {
       alert("Nenhuma compra pendente para pagar.");
       return;
     }
 
-    const batch = writeBatch(db);
-    querySnapshot.forEach(docSnap => {
-      const v = docSnap.data();
-      batch.update(docSnap.ref, {
+    for (const docRef of comprasPendentes) {
+      const v = docRef.data();
+      await updateDoc(doc(db, "vendas", docRef.id), {
         status: "pago",
         faltaReceber: 0,
         valorParcial: parseFloat(v.valor) || 0,
         dataReceber: null
       });
-    });
-    await batch.commit();
+    }
 
     const snapAtual = await getDocs(collection(db, "vendas"));
     localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
-    
+
     alert("Todas as compras do cliente marcadas como pagas.");
-    document.getElementById("mesFiltro").dispatchEvent(new Event('change'));
     mostrarComprasDetalhadas(telefone);
+    const mesFiltro = document.getElementById("mesFiltro")?.value;
+    if (mesFiltro) mostrarDia(mesFiltro + "-01");
   } catch (err) {
     console.error("Erro em pagarTudoCliente:", err);
     alert("Erro ao pagar tudo. Veja console.");
@@ -839,29 +785,32 @@ window.pagarParcialCliente = async (telefone) => {
   }
 
   try {
-    const q = query(collection(db, "vendas"), where("telefone", "==", telefone), where("status", "!=", "pago"));
-    const querySnapshot = await getDocs(q);
+    const snap = await getDocs(collection(db, "vendas"));
+    const comprasPendentes = snap.docs.filter(d => {
+      const v = d.data();
+      return (v.telefone || "").replace(/\D/g, "") === telefone && v.status !== "pago";
+    });
 
-    if (querySnapshot.empty) {
+    if (comprasPendentes.length === 0) {
       alert("Nenhuma compra pendente para pagar.");
       return;
     }
 
     let valorRestante = valorPago;
-    const batch = writeBatch(db);
 
-    for (const docSnap of querySnapshot.docs) {
-      if (valorRestante <= 0) break;
-      const v = docSnap.data();
+    for (const docRef of comprasPendentes) {
+      const v = docRef.data();
       const valorCompra = parseFloat(v.valor) || 0;
       const valorParcialAtual = parseFloat(v.valorParcial) || 0;
       const faltaAtual = valorCompra - valorParcialAtual;
+
+      if (valorRestante <= 0) break;
 
       const pagoAgora = Math.min(faltaAtual, valorRestante);
       const novoValorParcial = valorParcialAtual + pagoAgora;
       const statusNovo = (novoValorParcial >= valorCompra) ? "pago" : "parcial";
 
-      batch.update(docSnap.ref, {
+      await updateDoc(doc(db, "vendas", docRef.id), {
         valorParcial: novoValorParcial,
         faltaReceber: valorCompra - novoValorParcial,
         status: statusNovo
@@ -869,14 +818,14 @@ window.pagarParcialCliente = async (telefone) => {
 
       valorRestante -= pagoAgora;
     }
-    await batch.commit();
 
     const snapAtual = await getDocs(collection(db, "vendas"));
     localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
-    
+
     alert("Pagamento parcial registrado com sucesso.");
-    document.getElementById("mesFiltro").dispatchEvent(new Event('change'));
     mostrarComprasDetalhadas(telefone);
+    const mesFiltro = document.getElementById("mesFiltro")?.value;
+    if (mesFiltro) mostrarDia(mesFiltro + "-01");
   } catch (err) {
     console.error("Erro em pagarParcialCliente:", err);
     alert("Erro ao registrar pagamento parcial. Veja console.");
@@ -886,33 +835,32 @@ window.pagarParcialCliente = async (telefone) => {
 // === MARCAR PAGO DO GRUPO POR DIA (TODAS AS VENDAS DE UM CLIENTE EM UM DIA) ===
 window.marcarPagoGrupo = async (telefone, dataCompleta) => {
   try {
-    const q = query(collection(db, "vendas"), 
-      where("telefone", "==", telefone),
-      where("dataReceber", "==", dataCompleta),
-      where("status", "!=", "pago")
-    );
-    const querySnapshot = await getDocs(q);
+    const snap = await getDocs(collection(db, "vendas"));
+    const vendasParaPagar = snap.docs.filter(d => {
+      const v = d.data();
+      return (v.telefone || "").replace(/\D/g, "") === telefone
+        && v.dataReceber === dataCompleta
+        && v.status !== "pago";
+    });
 
-    if (querySnapshot.empty) {
+    if (vendasParaPagar.length === 0) {
       alert("Nenhuma compra pendente neste dia para pagar.");
       return;
     }
 
-    const batch = writeBatch(db);
-    querySnapshot.forEach(docSnap => {
-      const v = docSnap.data();
-      batch.update(docSnap.ref, {
+    for (const docRef of vendasParaPagar) {
+      const v = docRef.data();
+      await updateDoc(doc(db, "vendas", docRef.id), {
         status: "pago",
         faltaReceber: 0,
         valorParcial: parseFloat(v.valor) || 0,
         dataReceber: null
       });
-    });
-    await batch.commit();
+    }
 
     const snapAtual = await getDocs(collection(db, "vendas"));
     localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
-    
+
     alert("Compras do dia marcadas como pagas.");
     mostrarDia(dataCompleta);
   } catch (err) {
@@ -949,33 +897,34 @@ window.pagarParcialGrupo = async (telefone, dataCompleta) => {
   }
 
   try {
-    const q = query(collection(db, "vendas"), 
-      where("telefone", "==", telefone),
-      where("dataReceber", "==", dataCompleta),
-      where("status", "!=", "pago")
-    );
-    const querySnapshot = await getDocs(q);
+    const snap = await getDocs(collection(db, "vendas"));
+    const vendasPendentes = snap.docs.filter(d => {
+      const v = d.data();
+      return (v.telefone || "").replace(/\D/g, "") === telefone
+        && v.dataReceber === dataCompleta
+        && v.status !== "pago";
+    });
 
-    if (querySnapshot.empty) {
+    if (vendasPendentes.length === 0) {
       alert("Nenhuma compra pendente para pagar.");
       return;
     }
 
     let valorRestante = valorPago;
-    const batch = writeBatch(db);
 
-    for (const docSnap of querySnapshot.docs) {
-      if (valorRestante <= 0) break;
-      const v = docSnap.data();
+    for (const docRef of vendasPendentes) {
+      const v = docRef.data();
       const valorCompra = parseFloat(v.valor) || 0;
       const valorParcialAtual = parseFloat(v.valorParcial) || 0;
       const faltaAtual = valorCompra - valorParcialAtual;
+
+      if (valorRestante <= 0) break;
 
       const pagoAgora = Math.min(faltaAtual, valorRestante);
       const novoValorParcial = valorParcialAtual + pagoAgora;
       const statusNovo = (novoValorParcial >= valorCompra) ? "pago" : "parcial";
 
-      batch.update(docSnap.ref, {
+      await updateDoc(doc(db, "vendas", docRef.id), {
         valorParcial: novoValorParcial,
         faltaReceber: valorCompra - novoValorParcial,
         status: statusNovo
@@ -983,7 +932,6 @@ window.pagarParcialGrupo = async (telefone, dataCompleta) => {
 
       valorRestante -= pagoAgora;
     }
-    await batch.commit();
 
     const snapAtual = await getDocs(collection(db, "vendas"));
     localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -1021,39 +969,41 @@ window.confirmarReagendarGrupo = async (telefone, dataCompleta) => {
   const novaData = input.value;
 
   try {
-    const q = query(collection(db, "vendas"), 
-      where("telefone", "==", telefone),
-      where("dataReceber", "==", dataCompleta),
-      where("status", "!=", "pago")
-    );
-    const querySnapshot = await getDocs(q);
+    const snap = await getDocs(collection(db, "vendas"));
+    const vendasParaAtualizar = snap.docs.filter(d => {
+      const v = d.data();
+      return (v.telefone || "").replace(/\D/g, "") === telefone
+        && v.dataReceber === dataCompleta
+        && v.status !== "pago";
+    });
 
-    if (querySnapshot.empty) {
+    if (vendasParaAtualizar.length === 0) {
       alert("Nenhuma cobrança para reagendar.");
       return;
     }
 
-    const batch = writeBatch(db);
-    querySnapshot.forEach(docSnap => {
-      batch.update(docSnap.ref, { dataReceber: novaData });
-    });
-    await batch.commit();
+    for (const docRef of vendasParaAtualizar) {
+      await updateDoc(doc(db, "vendas", docRef.id), {
+        dataReceber: novaData
+      });
+    }
 
     const snapAtual = await getDocs(collection(db, "vendas"));
     localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
 
     alert("Cobranças reagendadas com sucesso.");
-    document.getElementById("mesFiltro").dispatchEvent(new Event('change'));
+    mostrarDia(novaData);
   } catch (err) {
     console.error("Erro em confirmarReagendarGrupo:", err);
     alert("Erro ao reagendar. Veja console.");
   }
 };
 
-// === FUNÇÃO DE COBRAR TUDO NO WHATSAPP (MENSAGEM ATUALIZADA) ===
+// === FUNÇÃO DE COBRAR TUDO NO WHATSAPP (CLIENTE/DIA OU SOMENTE CLIENTE) ===
 window.cobrarWhats = (telefone, dataCompleta = null) => {
   const snap = JSON.parse(localStorage.getItem("vendas") || "[]");
 
+  // Vendas pendentes do cliente (filtra por data se passado)
   let vendas = snap.filter(v =>
     (v.telefone || "").replace(/\D/g, "") === telefone &&
     v.status !== "pago"
@@ -1069,6 +1019,32 @@ window.cobrarWhats = (telefone, dataCompleta = null) => {
   }
 
   const nome = vendas[0].cliente || "Cliente";
-  const dataAgendada = dataCompleta ? formatarData(dataCompleta) : "Várias datas";
-  const datasCompras = [...new Set(vendas.map(v => formatarData(v.data)))].join(' | ');
-  
+  let numeroWhats = telefone;
+  if (!numeroWhats.startsWith("55")) numeroWhats = "55" + numeroWhats;
+
+  const linhas = vendas.map(v => {
+    const dataCompra = formatarData(v.data || "");
+    const produtos = (v.produtosVendidos || []).map(p => `🍬 ${p}`).join(", ");
+    const valorTotal = parseFloat(v.valor || 0);
+    const valorParcial = parseFloat(v.valorParcial || 0);
+    const falta = valorTotal - valorParcial;
+    return `📅 ${dataCompra} | Produtos: ${produtos} | Total: R$ ${valorTotal.toFixed(2)} | Pago: R$ ${valorParcial.toFixed(2)} | Falta: R$ ${falta.toFixed(2)}`;
+  }).join("\n");
+
+  const msg = `Olá ${nome}, tudo bem?\n\n` +
+              `Segue o extrato das cobranças pendentes:\n\n` +
+              linhas + "\n\n" +
+              `💳 Chave PIX:\nCNPJ 57.010.512/0001-56\n\n` +
+              `Por favor, envie o comprovante após o pagamento.\n\n— Ana Buck Doces`;
+
+  const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
+  window.open(link, "_blank");
+};
+
+// === FUNÇÃO AUXILIAR FORMATA DATA YYYY-MM-DD PARA DD/MM/AAAA ===
+function formatarData(data) {
+  if (!data) return "";
+  const partes = data.split("-");
+  if (partes.length < 3) return data;
+  return `${partes[2]}/${partes[1]}/${partes[0]}`;
+}
