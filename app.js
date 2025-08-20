@@ -549,7 +549,7 @@ window.showCobranca = async () => {
   });
 };
 
-// === EXIBE DETALHES DAS COBRANÇAS DE UM DIA (MODIFICADO PARA MOSTRAR COMPRAS INDIVIDUAIS) ===
+// === EXIBE DETALHES DAS COBRANÇAS DE UM DIA (AGRUPADO POR CLIENTE) ===
 window.mostrarDia = (dataCompleta) => {
   const snap = localStorage.getItem("vendas");
   const todasVendas = JSON.parse(snap || "[]");
@@ -566,40 +566,58 @@ window.mostrarDia = (dataCompleta) => {
     return;
   }
 
-  // Mapeia cada venda para um card individual, em vez de agrupar
-  const cards = vendasDoDia.map(venda => {
-    const nome = venda.cliente || "Sem nome";
-    const telefone = (venda.telefone || "").replace(/\D/g, "");
-    const valor = parseFloat(venda.valor || 0);
-    const valorParcial = parseFloat(venda.valorParcial || 0);
-    const faltaPagar = parseFloat(venda.faltaReceber) || (valor - valorParcial);
+  // 1. Agrupar vendas por telefone (cliente)
+  const gruposPorCliente = vendasDoDia.reduce((acc, venda) => {
+    const tel = (venda.telefone || "").replace(/\D/g, "") || "sem-telefone";
+    if (!acc[tel]) {
+      acc[tel] = [];
+    }
+    acc[tel].push(venda);
+    return acc;
+  }, {});
 
-    // Formata a lista de produtos com quebra de linha
-    const produtosHtml = (venda.produtosVendidos || []).map(p => `<div>- ${p}</div>`).join("");
+  // 2. Criar um card para cada grupo de cliente
+  const cards = Object.entries(gruposPorCliente).map(([telefone, vendasDoCliente]) => {
+    const nome = vendasDoCliente[0].cliente || "Sem nome";
 
+    // 3. Montar o HTML para cada compra individual dentro do card
+    const comprasHtml = vendasDoCliente.map(venda => {
+      const valor = parseFloat(venda.valor || 0);
+      const faltaPagar = parseFloat(venda.faltaReceber) || valor - (parseFloat(venda.valorParcial) || 0);
+      const produtosHtml = (venda.produtosVendidos || []).map(p => `<div>- ${p}</div>`).join("");
+
+      return `
+        <div class="compra-individual" style="border-top: 1px solid #eee; padding-top: 10px; margin-top: 10px;">
+          <p><strong>Data da Compra:</strong> ${formatarData(venda.data)}</p>
+          <p><strong>Valor:</strong> ${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} | <strong>Falta:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+          <p><strong>Produtos:</strong></p>
+          <div style="margin-left: 15px;">${produtosHtml || "Nenhum produto listado."}</div>
+          <div style="margin-top: 10px;">
+             <button onclick="marcarPagoCompra('${venda.id}', '${telefone}')">Pago (Esta)</button>
+             <button onclick="cobrarWhatsCompra('${venda.id}', '${telefone}')">WhatsApp (Esta)</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    // 4. Calcular os totais para o grupo de compras do cliente
+    const totalFaltaPagarGrupo = vendasDoCliente.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
+
+    // 5. Montar o card final do cliente com as compras e os totais
     return `
       <div class="card" style="margin-bottom:15px; padding:10px; border:1px solid #ccc; border-radius:8px;">
         <h3>${nome}</h3>
-        <p><strong>Data compra:</strong> ${formatarData(venda.data)}</p>
-        <p><strong>Local:</strong> ${venda.local || "Não informado"}</p>
-        <p><strong>Valor:</strong> ${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-        <p><strong>Status:</strong> ${venda.status}</p>
-        <p><strong>Forma de pagamento:</strong> ${venda.forma || "-"}</p>
-        <p><strong>Pago parcial:</strong> ${valorParcial.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-        <p><strong>Falta pagar:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-        <p><strong>Produtos:</strong></p>
-        <div style="margin-left: 15px;">${produtosHtml || "Nenhum produto listado."}</div>
-        
-        <div style="margin-top: 15px;">
-          <button onclick="mostrarComprasDetalhadas('${telefone}')">Ver Todas as Compras</button>
-          <button onclick="marcarPagoCompra('${venda.id}', '${telefone}')">Pago</button>
-          <button onclick="marcarParcialCompra('${venda.id}', '${telefone}')">Pago Parcial</button>
-          <button onclick="cobrarWhatsCompra('${venda.id}', '${telefone}')">Cobrar no WhatsApp</button>
-          <button onclick="reagendarGrupo('${telefone}', '${dataCompleta}')">Reagendar cobrança</button>
+        ${comprasHtml}
+        <div style="border-top: 2px solid #ccc; margin-top: 15px; padding-top: 10px; text-align: right;">
+          <p><strong>Total pendente para este cliente hoje: ${totalFaltaPagarGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong></p>
         </div>
-
+        <div style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px;">
+          <button onclick="mostrarComprasDetalhadas('${telefone}')">Ver Todas as Compras</button>
+          <button onclick="marcarPagoGrupo('${telefone}', '${dataCompleta}')">Pagar Tudo (Hoje)</button>
+          <button onclick="cobrarWhats('${telefone}', '${dataCompleta}')">WhatsApp (Tudo Hoje)</button>
+          <button onclick="reagendarGrupo('${telefone}', '${dataCompleta}')">Reagendar (Tudo Hoje)</button>
+        </div>
         <div id="reagendar-${telefone}" style="margin-top:8px;"></div>
-        <div id="parcial-${venda.id}" style="margin-top:8px;"></div>
         <div id="compras-detalhadas-${telefone}" style="margin-top:10px; display:none;"></div>
       </div>
     `;
@@ -607,6 +625,7 @@ window.mostrarDia = (dataCompleta) => {
 
   document.getElementById("detalhesDia").innerHTML = `<h3>Cobranças de ${formatarData(dataCompleta)}</h3>${cards}`;
 };
+
 
 // === FUNÇÃO PARA MARCAR PARCIAL DA COMPRA INDIVIDUAL (NECESSÁRIA PARA O CARD INDIVIDUAL) ===
 window.marcarParcialCompra = (idCompra, telefone) => {
@@ -798,7 +817,8 @@ window.cobrarWhatsCompra = async (idCompra, telefone) => {
 
     const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg )}`;
     window.open(link, "_blank");
-  } catch (err) {
+  } catch (err)
+  {
     console.error("Erro em cobrarWhatsCompra:", err);
     alert("Erro ao gerar cobrança WhatsApp. Veja console.");
   }
@@ -912,6 +932,43 @@ window.pagarParcialCliente = async (telefone) => {
   }
 };
 
+// === MARCAR PAGO DO GRUPO POR DIA (TODAS AS VENDAS DE UM CLIENTE EM UM DIA) ===
+window.marcarPagoGrupo = async (telefone, dataCompleta) => {
+  try {
+    const snap = await getDocs(collection(db, "vendas"));
+    const vendasParaPagar = snap.docs.filter(d => {
+      const v = d.data();
+      return (v.telefone || "").replace(/\D/g, "") === telefone
+        && v.dataReceber === dataCompleta
+        && v.status !== "pago";
+    });
+
+    if (vendasParaPagar.length === 0) {
+      alert("Nenhuma compra pendente neste dia para pagar.");
+      return;
+    }
+
+    for (const docRef of vendasParaPagar) {
+      const v = docRef.data();
+      await updateDoc(doc(db, "vendas", docRef.id), {
+        status: "pago",
+        faltaReceber: 0,
+        valorParcial: parseFloat(v.valor) || 0,
+        dataReceber: null
+      });
+    }
+
+    const snapAtual = await getDocs(collection(db, "vendas"));
+    localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
+    
+    alert("Compras do dia marcadas como pagas.");
+    mostrarDia(dataCompleta);
+  } catch (err) {
+    console.error("Erro em marcarPagoGrupo:", err);
+    alert("Erro ao marcar pago. Veja console.");
+  }
+};
+
 // === FUNÇÃO DE REAGENDAR COBRANÇA (GRUPO CLIENTE/DIA) ===
 window.reagendarGrupo = (telefone, dataCompleta) => {
   const container = document.getElementById(`reagendar-${telefone}`);
@@ -960,7 +1017,6 @@ window.confirmarReagendarGrupo = async (telefone, dataCompleta) => {
     localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
 
     alert("Cobranças reagendadas com sucesso.");
-    // Recarrega a tela de cobrança para refletir a mudança no calendário
     window.showCobranca();
   } catch (err) {
     console.error("Erro em confirmarReagendarGrupo:", err);
