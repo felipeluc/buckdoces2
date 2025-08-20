@@ -908,8 +908,7 @@ window.cobrarWhats = async (telefone, dataCompleta = null) => {
     ``,
     `📩 Por gentileza, envie o comprovante.`,
     ``,
-    `— Ana Buck Doces`,
-    `\n${'https://raw.githubusercontent.com/felipeluc/buckdoces2/refs/heads/main/fotobuck.jpeg'}`
+    `— Ana Buck Doces`
   ].join("\n");
 
   const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
