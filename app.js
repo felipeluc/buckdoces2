@@ -469,7 +469,6 @@ window.showCobranca = async () => {
       return;
     }
 
-    // Lista de clientes únicos por telefone (unifica por telefone, mostra só nome)
     const clientes = pendentes
       .filter(v => v.local === localSelecionado)
       .reduce((acc, v) => {
@@ -505,9 +504,9 @@ window.showCobranca = async () => {
     document.getElementById("detalhesDia").innerHTML = "";
   });
 
-  // Filtro MÊS (adaptado para cliente)
+  // Filtro MÊS
   document.getElementById("mesFiltro").addEventListener("change", e => {
-    const mes = e.target.value; // 'YYYY-MM'
+    const mes = e.target.value;
     const telefoneSelecionado = document.getElementById("clienteFiltro").value;
     const vendasCliente = pendentes.filter(v => (v.telefone || "").replace(/\D/g, "") === telefoneSelecionado);
 
@@ -517,7 +516,6 @@ window.showCobranca = async () => {
       return;
     }
 
-    // Pega dias do mês com vendas para aquele cliente
     const diasDoMes = {};
     vendasCliente.forEach(v => {
       if (v.dataReceber?.startsWith(mes)) {
@@ -527,7 +525,6 @@ window.showCobranca = async () => {
       }
     });
 
-    // Monta calendário simples: número do dia + valor total pendente daquele dia
     const calendarioHtml = Array.from({ length: 31 }, (_, i) => {
       const diaStr = String(i + 1).padStart(2, "0");
       const vendasDoDia = diasDoMes[diaStr] || [];
@@ -536,7 +533,7 @@ window.showCobranca = async () => {
 
       return `
         <div class="calendar-day" style="cursor:${temVenda ? "pointer" : "default"}; opacity:${temVenda ? 1 : 0.3};"
-          onclick="${temVenda ? `mostrarDia('${mes}-${diaStr}')` : ''}">
+          onclick="${temVenda ? `mostrarDia(\'${mes}-${diaStr}\')` : ''}">
           <div><strong>${i + 1}</strong></div>
           <div style="font-size:0.8em; color:#444;">
             ${temVenda ? totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : ''}
@@ -566,7 +563,6 @@ window.mostrarDia = (dataCompleta) => {
     return;
   }
 
-  // 1. Agrupar vendas por telefone (cliente)
   const gruposPorCliente = vendasDoDia.reduce((acc, venda) => {
     const tel = (venda.telefone || "").replace(/\D/g, "") || "sem-telefone";
     if (!acc[tel]) {
@@ -576,34 +572,27 @@ window.mostrarDia = (dataCompleta) => {
     return acc;
   }, {});
 
-  // 2. Criar um card para cada grupo de cliente
   const cards = Object.entries(gruposPorCliente).map(([telefone, vendasDoCliente]) => {
     const nome = vendasDoCliente[0].cliente || "Sem nome";
 
-    // 3. Montar o HTML para cada compra individual dentro do card
-    const comprasHtml = vendasDoCliente.map(venda => {
+    const comprasHtml = vendasDoCliente.map((venda, index) => {
       const valor = parseFloat(venda.valor || 0);
       const faltaPagar = parseFloat(venda.faltaReceber) || valor - (parseFloat(venda.valorParcial) || 0);
       const produtosHtml = (venda.produtosVendidos || []).map(p => `<div>- ${p}</div>`).join("");
+      const borderStyle = index > 0 ? 'border-top: 1px solid #eee; padding-top: 10px; margin-top: 10px;' : '';
 
       return `
-        <div class="compra-individual" style="border-top: 1px solid #eee; padding-top: 10px; margin-top: 10px;">
+        <div class="compra-individual" style="${borderStyle}">
           <p><strong>Data da Compra:</strong> ${formatarData(venda.data)}</p>
           <p><strong>Valor:</strong> ${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} | <strong>Falta:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
           <p><strong>Produtos:</strong></p>
           <div style="margin-left: 15px;">${produtosHtml || "Nenhum produto listado."}</div>
-          <div style="margin-top: 10px;">
-             <button onclick="marcarPagoCompra('${venda.id}', '${telefone}')">Pago (Esta)</button>
-             <button onclick="cobrarWhatsCompra('${venda.id}', '${telefone}')">WhatsApp (Esta)</button>
-          </div>
         </div>
       `;
     }).join("");
 
-    // 4. Calcular os totais para o grupo de compras do cliente
     const totalFaltaPagarGrupo = vendasDoCliente.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
 
-    // 5. Montar o card final do cliente com as compras e os totais
     return `
       <div class="card" style="margin-bottom:15px; padding:10px; border:1px solid #ccc; border-radius:8px;">
         <h3>${nome}</h3>
@@ -611,13 +600,15 @@ window.mostrarDia = (dataCompleta) => {
         <div style="border-top: 2px solid #ccc; margin-top: 15px; padding-top: 10px; text-align: right;">
           <p><strong>Total pendente para este cliente hoje: ${totalFaltaPagarGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong></p>
         </div>
-        <div style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px;">
-          <button onclick="mostrarComprasDetalhadas('${telefone}')">Ver Todas as Compras</button>
-          <button onclick="marcarPagoGrupo('${telefone}', '${dataCompleta}')">Pagar Tudo (Hoje)</button>
-          <button onclick="cobrarWhats('${telefone}', '${dataCompleta}')">WhatsApp (Tudo Hoje)</button>
-          <button onclick="reagendarGrupo('${telefone}', '${dataCompleta}')">Reagendar (Tudo Hoje)</button>
+        <div style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; display: flex; flex-wrap: wrap; gap: 10px;">
+          <button onclick="mostrarComprasDetalhadas(\'${telefone}\')">Ver Todas</button>
+          <button onclick="marcarPagoGrupo(\'${telefone}\', \'${dataCompleta}\')">Pagar Tudo</button>
+          <button onclick="mostrarFormParcialGrupo(\'${telefone}\', \'${dataCompleta}\')">Pago Parcial</button>
+          <button onclick="cobrarWhats(\'${telefone}\', \'${dataCompleta}\')">WhatsApp</button>
+          <button onclick="reagendarGrupo(\'${telefone}\', \'${dataCompleta}\')">Reagendar</button>
         </div>
-        <div id="reagendar-${telefone}" style="margin-top:8px;"></div>
+        <div id="parcial-grupo-${telefone}" style="margin-top:10px; display:none;"></div>
+        <div id="reagendar-${telefone}" style="margin-top:8px; display:none;"></div>
         <div id="compras-detalhadas-${telefone}" style="margin-top:10px; display:none;"></div>
       </div>
     `;
@@ -626,63 +617,92 @@ window.mostrarDia = (dataCompleta) => {
   document.getElementById("detalhesDia").innerHTML = `<h3>Cobranças de ${formatarData(dataCompleta)}</h3>${cards}`;
 };
 
-
-// === FUNÇÃO PARA MARCAR PARCIAL DA COMPRA INDIVIDUAL (NECESSÁRIA PARA O CARD INDIVIDUAL) ===
-window.marcarParcialCompra = (idCompra, telefone) => {
-    const container = document.getElementById(`parcial-${idCompra}`);
-    if (!container) return;
-
+// === MOSTRAR FORMULÁRIO DE PAGAMENTO PARCIAL DE GRUPO ===
+window.mostrarFormParcialGrupo = (telefone, dataCompleta) => {
+    const container = document.getElementById(`parcial-grupo-${telefone}`);
     if (container.style.display === "block") {
         container.style.display = "none";
         container.innerHTML = "";
         return;
     }
-
     container.innerHTML = `
-        <input type="number" id="valorParcialInput-${idCompra}" placeholder="Valor pago" step="0.01" min="0" style="margin-right:10px;">
-        <button onclick="confirmarParcialCompra('${idCompra}', '${telefone}')">Confirmar</button>
+        <div style="padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-top: 10px;">
+            <label style="display: block; margin-bottom: 5px;">Valor pago agora:</label>
+            <input type="number" id="valorParcialInput-grupo-${telefone}" placeholder="Ex: 50.00" step="0.01" min="0" style="margin-bottom: 10px; width: calc(100% - 16px); padding: 8px;">
+            <label style="display: block; margin-bottom: 5px;">Reagendar restante para:</label>
+            <input type="date" id="novaDataReagendar-grupo-${telefone}" style="margin-bottom: 10px; width: calc(100% - 16px); padding: 8px;">
+            <button onclick="confirmarParcialGrupo(\'${telefone}\', \'${dataCompleta}\')" style="padding: 8px 12px;">Confirmar Pagamento Parcial</button>
+        </div>
     `;
     container.style.display = "block";
 };
 
-// === FUNÇÃO PARA CONFIRMAR PAGAMENTO PARCIAL INDIVIDUAL (NECESSÁRIA PARA O CARD INDIVIDUAL) ===
-window.confirmarParcialCompra = async (idCompra, telefone) => {
-    const input = document.getElementById(`valorParcialInput-${idCompra}`);
-    if (!input || !input.value || isNaN(input.value)) {
-        return alert("Informe um valor válido.");
+// === CONFIRMAR PAGAMENTO PARCIAL DE GRUPO E REAGENDAR RESTANTE ===
+window.confirmarParcialGrupo = async (telefone, dataCompleta) => {
+    const valorInput = document.getElementById(`valorParcialInput-grupo-${telefone}`);
+    const dataInput = document.getElementById(`novaDataReagendar-grupo-${telefone}`);
+
+    if (!valorInput || !valorInput.value || isNaN(valorInput.value) || parseFloat(valorInput.value) <= 0) {
+        return alert("Informe um valor pago válido.");
     }
-    const valorPago = parseFloat(input.value);
+    if (!dataInput || !dataInput.value) {
+        return alert("Informe uma nova data para reagendar o valor restante.");
+    }
+
+    const valorPago = parseFloat(valorInput.value);
+    const novaData = dataInput.value;
 
     try {
-        const docRef = doc(db, "vendas", idCompra);
-        const docSnap = await getDoc(docRef);
+        const snap = await getDocs(collection(db, "vendas"));
+        const vendasDoGrupo = snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter(v => (v.telefone || "").replace(/\D/g, "") === telefone && v.dataReceber === dataCompleta && v.status !== "pago")
+            .sort((a, b) => new Date(a.data) - new Date(b.data));
 
-        if (!docSnap.exists()) {
-            return alert("Compra não encontrada.");
+        if (vendasDoGrupo.length === 0) {
+            return alert("Nenhuma cobrança encontrada para este grupo.");
         }
 
-        const venda = docSnap.data();
-        const valorTotal = parseFloat(venda.valor || 0);
-        const novoValorParcial = parseFloat(venda.valorParcial || 0) + valorPago;
-        const novoFaltaReceber = valorTotal - novoValorParcial;
-        const novoStatus = novoFaltaReceber <= 0 ? "pago" : "parcial";
+        let valorRestanteAPagar = valorPago;
+        const idsParaReagendar = [];
 
-        await updateDoc(docRef, {
-            valorParcial: novoValorParcial,
-            faltaReceber: novoFaltaReceber,
-            status: novoStatus,
-            dataReceber: novoStatus === 'pago' ? null : venda.dataReceber
-        });
+        for (const venda of vendasDoGrupo) {
+            let novoValorParcial = parseFloat(venda.valorParcial) || 0;
+            let novoFaltaReceber = parseFloat(venda.faltaReceber) || (parseFloat(venda.valor) - novoValorParcial);
+            
+            if (valorRestanteAPagar > 0) {
+                const pagamentoParaEstaVenda = Math.min(valorRestanteAPagar, novoFaltaReceber);
+                novoValorParcial += pagamentoParaEstaVenda;
+                novoFaltaReceber -= pagamentoParaEstaVenda;
+                valorRestanteAPagar -= pagamentoParaEstaVenda;
+            }
+
+            const novoStatus = novoFaltaReceber < 0.01 ? "pago" : "parcial";
+
+            await updateDoc(doc(db, "vendas", venda.id), {
+                valorParcial: novoValorParcial,
+                faltaReceber: novoFaltaReceber,
+                status: novoStatus,
+            });
+
+            if (novoStatus !== 'pago') {
+                idsParaReagendar.push(venda.id);
+            }
+        }
+
+        for (const id of idsParaReagendar) {
+            await updateDoc(doc(db, "vendas", id), { dataReceber: novaData });
+        }
 
         const snapAtual = await getDocs(collection(db, "vendas"));
         localStorage.setItem("vendas", JSON.stringify(snapAtual.docs.map(d => ({ id: d.id, ...d.data() }))));
 
-        alert("Pagamento parcial registrado!");
-        mostrarDia(venda.dataReceber); // Atualiza a visualização do dia
+        alert("Pagamento parcial registrado e saldo devedor reagendado com sucesso!");
+        window.showCobranca();
 
     } catch (err) {
-        console.error("Erro em confirmarParcialCompra:", err);
-        alert("Erro ao registrar pagamento parcial. Veja o console.");
+        console.error("Erro em confirmarParcialGrupo:", err);
+        alert("Erro ao processar pagamento parcial. Veja o console.");
     }
 };
 
@@ -714,10 +734,9 @@ window.mostrarComprasDetalhadas = (telefone) => {
         <p><strong>Status:</strong> ${v.status}</p>
         <p><strong>Forma de pagamento:</strong> ${v.forma || "-"}</p>
         <p><strong>Para pagar em:</strong> ${formatarData(v.dataReceber) || "-"}</p>
-        <p><strong>Produtos:</strong>  
-${produtosFormatado}</p>
-        <button onclick="marcarPagoCompra('${v.id}', '${telefone}')">Pago</button>
-        <button onclick="cobrarWhatsCompra('${v.id}', '${telefone}')">Cobrar no WhatsApp</button>
+        <p><strong>Produtos:</strong><br>${produtosFormatado}</p>
+        <button onclick="marcarPagoCompra(\'${v.id}\', \'${telefone}\')">Pago</button>
+        <button onclick="cobrarWhatsCompra(\'${v.id}\', \'${telefone}\')">Cobrar no WhatsApp</button>
       </div>
     `;
   }).join("");
@@ -734,9 +753,9 @@ ${produtosFormatado}</p>
     <p><strong>Total pago:</strong> ${totalPago.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
     <p><strong>Total para receber:</strong> ${totalFalta.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
 
-    <button onclick="pagarTudoCliente('${telefone}')">Pagar tudo</button>
-    <button onclick="mostrarFormParcialTotal('${telefone}')">Pago parcial</button>
-    <button onclick="cobrarWhats('${telefone}')">Cobrar tudo no WhatsApp</button>
+    <button onclick="pagarTudoCliente(\'${telefone}\')">Pagar tudo</button>
+    <button onclick="mostrarFormParcialTotal(\'${telefone}\')">Pago parcial</button>
+    <button onclick="cobrarWhats(\'${telefone}\')">Cobrar tudo no WhatsApp</button>
 
     <div id="parcial-total-${telefone}" style="margin-top:10px;"></div>
   `;
@@ -815,10 +834,9 @@ window.cobrarWhatsCompra = async (idCompra, telefone) => {
       `— Ana Buck Doces`
     ].join("\n");
 
-    const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg )}`;
+    const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
     window.open(link, "_blank");
-  } catch (err)
-  {
+  } catch (err) {
     console.error("Erro em cobrarWhatsCompra:", err);
     alert("Erro ao gerar cobrança WhatsApp. Veja console.");
   }
@@ -870,7 +888,7 @@ window.mostrarFormParcialTotal = (telefone) => {
 
   container.innerHTML = `
     <input type="number" id="valorParcialInput-${telefone}" placeholder="Valor pago parcialmente" step="0.01" min="0" style="margin-right:10px;">
-    <button onclick="pagarParcialCliente('${telefone}')">Confirmar pagamento parcial</button>
+    <button onclick="pagarParcialCliente(\'${telefone}\')">Confirmar pagamento parcial</button>
   `;
   container.style.display = "block";
 };
@@ -914,7 +932,7 @@ window.pagarParcialCliente = async (telefone) => {
 
       await updateDoc(doc(db, "vendas", docRef.id), {
         valorParcial: novoValorParcial,
-        faltaReceber: valorCompra - novoValorParcial,
+        faltaReceber: novoFaltaReceber,
         status: statusNovo
       });
 
@@ -932,7 +950,7 @@ window.pagarParcialCliente = async (telefone) => {
   }
 };
 
-// === MARCAR PAGO DO GRUPO POR DIA (TODAS AS VENDAS DE UM CLIENTE EM UM DIA) ===
+// === MARCAR PAGO DO GRUPO POR DIA ===
 window.marcarPagoGrupo = async (telefone, dataCompleta) => {
   try {
     const snap = await getDocs(collection(db, "vendas"));
@@ -980,7 +998,7 @@ window.reagendarGrupo = (telefone, dataCompleta) => {
 
   container.innerHTML = `
     <input type="date" id="novaDataReagendar-${telefone}" style="margin-right:10px;" />
-    <button onclick="confirmarReagendarGrupo('${telefone}', '${dataCompleta}')">Confirmar nova data</button>
+    <button onclick="confirmarReagendarGrupo(\'${telefone}\', \'${dataCompleta}\')">Confirmar nova data</button>
   `;
   container.style.display = "block";
 };
@@ -1024,13 +1042,12 @@ window.confirmarReagendarGrupo = async (telefone, dataCompleta) => {
   }
 };
 
-// === FUNÇÃO DE COBRAR TUDO NO WHATSAPP (CLIENTE/DIA OU SOMENTE CLIENTE) (FORMATADO) ===
-window.cobrarWhats = (telefone, dataCompleta = null) => {
+// === FUNÇÃO DE COBRAR TUDO NO WHATSAPP (GRUPO, FORMATO NOVO) ===
+window.cobrarWhats = async (telefone, dataCompleta = null) => {
   const snap = JSON.parse(localStorage.getItem("vendas") || "[]");
 
   let vendas = snap.filter(v =>
-    (v.telefone || "").replace(/\D/g, "") === telefone &&
-    v.status !== "pago"
+    (v.telefone || "").replace(/\D/g, "") === telefone && v.status !== "pago"
   );
 
   if (dataCompleta) {
@@ -1038,41 +1055,47 @@ window.cobrarWhats = (telefone, dataCompleta = null) => {
   }
 
   if (vendas.length === 0) {
-    alert("Nenhuma cobrança pendente para este cliente.");
+    alert("Nenhuma cobrança pendente para este cliente/data.");
     return;
   }
 
   const nome = vendas[0].cliente || "Cliente";
-  let numeroWhats = telefone;
+  let numeroWhats = telefone.replace(/\D/g, "");
   if (!numeroWhats.startsWith("55")) numeroWhats = "55" + numeroWhats;
 
-  const totalGeral = vendas.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
-
-  const linhas = vendas.map(v => {
-    const dataCompra = formatarData(v.data || "");
-    const produtos = (v.produtosVendidos || []).join(", ");
-    const falta = parseFloat(v.faltaReceber) || 0;
-    return `*Compra de ${dataCompra}*:\n- Produtos: ${produtos}\n- Falta: R$ ${falta.toFixed(2)}`;
-  }).join("\n\n");
+  // Consolida os dados para a mensagem
+  const totalValor = vendas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
+  const totalPago = vendas.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
+  const totalFalta = totalValor - totalPago;
+  
+  const datasCompras = [...new Set(vendas.map(v => formatarData(v.data)))].join(' | ');
+  const todosProdutos = vendas.flatMap(v => v.produtosVendidos || []);
+  const listaProdutos = todosProdutos.map(p => `- ${p}`).join("\n");
 
   const msg = [
     `Olá ${nome}, tudo bem?`,
     ``,
-    `Segue o extrato das suas cobranças pendentes:`,
-    `-----------------------------------`,
-    `${linhas}`,
-    `-----------------------------------`,
-    `*Total pendente:* R$ ${totalGeral.toFixed(2)}`,
+    `💬 Passando para lembrar de uma cobrança pendente:`,
+    ``,
+    `🗓️ *Data agendada:* ${formatarData(dataCompleta)}`,
+    `📅 *Datas das compras:* ${datasCompras}`,
+    ``,
+    `🍬 *Produtos:*`,
+    `${listaProdutos}`,
+    ``,
+    `💰 *Total:* R$ ${totalValor.toFixed(2)}`,
+    `✅ *Pago:* R$ ${totalPago.toFixed(2)}`,
+    `🔔 *Falta:* R$ ${totalFalta.toFixed(2)}`,
     ``,
     `💳 *Chave PIX (CNPJ):*`,
     `57.010.512/0001-56`,
     ``,
-    `Por favor, envie o comprovante após o pagamento.`,
+    `📩 Por gentileza, envie o comprovante.`,
     ``,
     `— Ana Buck Doces`
   ].join("\n");
 
-  const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg )}`;
+  const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
   window.open(link, "_blank");
 };
 
