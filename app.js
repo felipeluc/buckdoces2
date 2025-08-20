@@ -579,37 +579,45 @@ window.mostrarDia = (dataCompleta) => {
       const valor = parseFloat(venda.valor || 0);
       const faltaPagar = parseFloat(venda.faltaReceber) || valor - (parseFloat(venda.valorParcial) || 0);
       const produtosHtml = (venda.produtosVendidos || []).map(p => `<div>- ${p}</div>`).join("");
-      const borderStyle = index > 0 ? 'border-top: 1px solid #eee; padding-top: 10px; margin-top: 10px;' : '';
+      const borderStyle = index > 0 ? 'border-top: 1px dashed #ccc; padding-top: 10px; margin-top: 10px;' : '';
 
       return `
         <div class="compra-individual" style="${borderStyle}">
           <p><strong>Data da Compra:</strong> ${formatarData(venda.data)}</p>
-          <p><strong>Valor:</strong> ${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} | <strong>Falta:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+          <p><strong>Valor Total:</strong> ${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+          <p><strong>Valor Pago:</strong> ${(parseFloat(venda.valorParcial) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+          <p><strong>Falta Pagar:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
           <p><strong>Produtos:</strong></p>
           <div style="margin-left: 15px;">${produtosHtml || "Nenhum produto listado."}</div>
         </div>
       `;
     }).join("");
 
+    const totalValorGrupo = vendasDoCliente.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
+    const totalPagoGrupo = vendasDoCliente.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
     const totalFaltaPagarGrupo = vendasDoCliente.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
 
     return `
-      <div class="card" style="margin-bottom:15px; padding:10px; border:1px solid #ccc; border-radius:8px;">
-        <h3>${nome}</h3>
-        ${comprasHtml}
-        <div style="border-top: 2px solid #ccc; margin-top: 15px; padding-top: 10px; text-align: right;">
-          <p><strong>Total pendente para este cliente hoje: ${totalFaltaPagarGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong></p>
+      <div class="card" style="margin-bottom:20px; padding:15px; border:1px solid #a0a0a0; border-radius:10px; box-shadow: 2px 2px 8px rgba(0,0,0,0.1); background-color: #f9f9f9;">
+        <h3 style="margin-top:0; color:#333;">${nome}</h3>
+        <div style="border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 15px;">
+          ${comprasHtml}
         </div>
-        <div style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; display: flex; flex-wrap: wrap; gap: 10px;">
-          <button onclick="mostrarComprasDetalhadas(\'${telefone}\')">Ver Todas</button>
-          <button onclick="marcarPagoGrupo(\'${telefone}\', \'${dataCompleta}\')">Pagar Tudo</button>
-          <button onclick="mostrarFormParcialGrupo(\'${telefone}\', \'${dataCompleta}\')">Pago Parcial</button>
-          <button onclick="cobrarWhats(\'${telefone}\', \'${dataCompleta}\')">WhatsApp</button>
-          <button onclick="reagendarGrupo(\'${telefone}\', \'${dataCompleta}\')">Reagendar</button>
+        <div style="padding-top: 10px; text-align: right; font-size: 1.1em; font-weight: bold; color: #555;">
+          <p style="margin: 5px 0;">Total Geral: ${totalValorGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+          <p style="margin: 5px 0;">Total Pago: ${totalPagoGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+          <p style="margin: 5px 0; color: #d9534f;">Total Pendente: ${totalFaltaPagarGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
         </div>
-        <div id="parcial-grupo-${telefone}" style="margin-top:10px; display:none;"></div>
-        <div id="reagendar-${telefone}" style="margin-top:8px; display:none;"></div>
-        <div id="compras-detalhadas-${telefone}" style="margin-top:10px; display:none;"></div>
+        <div style="margin-top: 20px; border-top: 1px solid #ddd; padding-top: 15px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
+          <button style="background-color: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9em;" onclick="mostrarComprasDetalhadas(\'${telefone}\')">Ver Todas</button>
+          <button style="background-color: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9em;" onclick="marcarPagoGrupo(\'${telefone}\', \'${dataCompleta}\')">Pagar Tudo</button>
+          <button style="background-color: #ffc107; color: #333; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9em;" onclick="mostrarFormParcialGrupo(\'${telefone}\', \'${dataCompleta}\')">Pago Parcial</button>
+          <button style="background-color: #17a2b8; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9em;" onclick="cobrarWhats(\'${telefone}\', \'${dataCompleta}\')">WhatsApp</button>
+          <button style="background-color: #6c757d; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9em;" onclick="reagendarGrupo(\'${telefone}\', \'${dataCompleta}\')">Reagendar</button>
+        </div>
+        <div id="parcial-grupo-${telefone}" style="margin-top:15px; display:none;"></div>
+        <div id="reagendar-${telefone}" style="margin-top:15px; display:none;"></div>
+        <div id="compras-detalhadas-${telefone}" style="margin-top:15px; display:none;"></div>
       </div>
     `;
   }).join("");
@@ -626,12 +634,12 @@ window.mostrarFormParcialGrupo = (telefone, dataCompleta) => {
         return;
     }
     container.innerHTML = `
-        <div style="padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-top: 10px;">
-            <label style="display: block; margin-bottom: 5px;">Valor pago agora:</label>
-            <input type="number" id="valorParcialInput-grupo-${telefone}" placeholder="Ex: 50.00" step="0.01" min="0" style="margin-bottom: 10px; width: calc(100% - 16px); padding: 8px;">
-            <label style="display: block; margin-bottom: 5px;">Reagendar restante para:</label>
-            <input type="date" id="novaDataReagendar-grupo-${telefone}" style="margin-bottom: 10px; width: calc(100% - 16px); padding: 8px;">
-            <button onclick="confirmarParcialGrupo(\'${telefone}\', \'${dataCompleta}\')" style="padding: 8px 12px;">Confirmar Pagamento Parcial</button>
+        <div style="padding: 15px; border: 1px solid #ddd; border-radius: 8px; margin-top: 15px; background-color: #fff;">
+            <label style="display: block; margin-bottom: 8px; font-weight: bold;">Valor pago agora:</label>
+            <input type="number" id="valorParcialInput-grupo-${telefone}" placeholder="Ex: 50.00" step="0.01" min="0" style="margin-bottom: 12px; width: calc(100% - 20px); padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: bold;">Reagendar restante para:</label>
+            <input type="date" id="novaDataReagendar-grupo-${telefone}" style="margin-bottom: 12px; width: calc(100% - 20px); padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+            <button style="background-color: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9em;" onclick="confirmarParcialGrupo(\'${telefone}\', \'${dataCompleta}\')">Confirmar Pagamento Parcial</button>
         </div>
     `;
     container.style.display = "block";
@@ -932,7 +940,7 @@ window.pagarParcialCliente = async (telefone) => {
 
       await updateDoc(doc(db, "vendas", docRef.id), {
         valorParcial: novoValorParcial,
-        faltaReceber: novoFaltaReceber,
+        faltaReceber: valorCompra - novoValorParcial,
         status: statusNovo
       });
 
@@ -1128,3 +1136,4 @@ style.innerHTML = `
   }
 `;
 document.head.appendChild(style);
+
