@@ -591,7 +591,8 @@ window.mostrarDia = (dataCompleta) => {
         <div style="border-top:1px solid #ccc; margin-top:8px; padding-top:6px;">
           <p><strong>Compra ID:</strong> ${v.id}</p>
           <p><strong>Data compra:</strong> ${formatarData(v.data)}</p>
-          <p><strong>Produtos:</strong><br>${produtosHtml || "-"}</p>
+          <p><strong>Produtos:</strong>  
+${produtosHtml || "-"}</p>
           <p><strong>Valor total:</strong> ${parseFloat(v.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
           <p><strong>Status:</strong> ${v.status}</p>
           <button onclick="marcarPagoCompra('${v.id}', '${telefone}')">Pago</button>
@@ -653,7 +654,8 @@ window.mostrarComprasDetalhadas = (telefone) => {
         <p><strong>Status:</strong> ${v.status}</p>
         <p><strong>Forma de pagamento:</strong> ${v.forma || "-"}</p>
         <p><strong>Para pagar em:</strong> ${formatarData(v.dataReceber) || "-"}</p>
-        <p><strong>Produtos:</strong><br>${produtosFormatado}</p>
+        <p><strong>Produtos:</strong>  
+${produtosFormatado}</p>
         <button onclick="marcarPagoCompra('${v.id}', '${telefone}')">Pago</button>
         <button onclick="cobrarWhatsCompra('${v.id}', '${telefone}')">Cobrar no WhatsApp</button>
       </div>
@@ -715,7 +717,7 @@ window.marcarPagoCompra = async (idCompra, telefone) => {
   }
 };
 
-// === COBRAR WHATSAPP COMPRA INDIVIDUAL ===
+// === COBRAR WHATSAPP COMPRA INDIVIDUAL (FORMATADO) ===
 window.cobrarWhatsCompra = async (idCompra, telefone) => {
   try {
     const snap = await getDocs(collection(db, "vendas"));
@@ -729,23 +731,35 @@ window.cobrarWhatsCompra = async (idCompra, telefone) => {
     const valorTotal = parseFloat(v.valor || 0);
     const valorParcial = parseFloat(v.valorParcial || 0);
     const falta = parseFloat(v.faltaReceber || valorTotal - valorParcial);
-    const listaProdutos = (v.produtosVendidos || []).map(p => `${p}`).join("\n");
+    const listaProdutos = (v.produtosVendidos || []).map(p => `- ${p}`).join("\n");
 
     let numeroWhats = telefone.replace(/\D/g, "");
     if (!numeroWhats.startsWith("55")) numeroWhats = "55" + numeroWhats;
 
-    const msg = `Olá ${nome}!, tudo bem?\n\n` +
-                `💬 Passando para lembrar de uma cobrança pendente:\n\n` +
-                `🗓 Data agendada: ${dataAgendada}\n` +
-                `📅 Data da compra: ${dataCompra}\n\n` +
-                `🍬 Produtos:\n${listaProdutos}\n\n` +
-                `💰 Total: R$ ${valorTotal.toFixed(2)}\n` +
-                `✅ Pago: R$ ${valorParcial.toFixed(2)}\n` +
-                `🔔 Falta: R$ ${falta.toFixed(2)}\n\n` +
-                `💳 Chave PIX:\nCNPJ 57.010.512/0001-56\n\n` +
-                `📩 Envie o comprovante por gentileza.\n\n— Ana Buck Doces`;
+    const msg = [
+      `Olá ${nome}, tudo bem?`,
+      ``,
+      `💬 Passando para lembrar de uma cobrança pendente:`,
+      ``,
+      `🗓️ *Data agendada:* ${dataAgendada}`,
+      `📅 *Data da compra:* ${dataCompra}`,
+      ``,
+      `🍬 *Produtos:*`,
+      `${listaProdutos}`,
+      ``,
+      `💰 *Total:* R$ ${valorTotal.toFixed(2)}`,
+      `✅ *Pago:* R$ ${valorParcial.toFixed(2)}`,
+      `🔔 *Falta:* R$ ${falta.toFixed(2)}`,
+      ``,
+      `💳 *Chave PIX (CNPJ):*`,
+      `57.010.512/0001-56`,
+      ``,
+      `📩 Por gentileza, envie o comprovante.`,
+      ``,
+      `— Ana Buck Doces`
+    ].join("\n");
 
-    const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
+    const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg )}`;
     window.open(link, "_blank");
   } catch (err) {
     console.error("Erro em cobrarWhatsCompra:", err);
@@ -1032,7 +1046,7 @@ window.confirmarReagendarGrupo = async (telefone, dataCompleta) => {
   }
 };
 
-// === FUNÇÃO DE COBRAR TUDO NO WHATSAPP (CLIENTE/DIA OU SOMENTE CLIENTE) ===
+// === FUNÇÃO DE COBRAR TUDO NO WHATSAPP (CLIENTE/DIA OU SOMENTE CLIENTE) (FORMATADO) ===
 window.cobrarWhats = (telefone, dataCompleta = null) => {
   const snap = JSON.parse(localStorage.getItem("vendas") || "[]");
 
@@ -1055,22 +1069,33 @@ window.cobrarWhats = (telefone, dataCompleta = null) => {
   let numeroWhats = telefone;
   if (!numeroWhats.startsWith("55")) numeroWhats = "55" + numeroWhats;
 
+  const totalGeral = vendas.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
+
   const linhas = vendas.map(v => {
     const dataCompra = formatarData(v.data || "");
     const produtos = (v.produtosVendidos || []).join(", ");
-    const valorTotal = parseFloat(v.valor || 0);
-    const valorParcial = parseFloat(v.valorParcial || 0);
-    const falta = valorTotal - valorParcial;
-    return `📅 ${dataCompra} | Produtos: ${produtos} | Total: R$ ${valorTotal.toFixed(2)} | Pago: R$ ${valorParcial.toFixed(2)} | Falta: R$ ${falta.toFixed(2)}`;
-  }).join("\n");
+    const falta = parseFloat(v.faltaReceber) || 0;
+    return `*Compra de ${dataCompra}*:\n- Produtos: ${produtos}\n- Falta: R$ ${falta.toFixed(2)}`;
+  }).join("\n\n");
 
-  const msg = `Olá ${nome}, tudo bem?\n\n` +
-              `Segue o extrato das cobranças pendentes:\n\n` +
-              linhas + "\n\n" +
-              `💳 Chave PIX:\nCNPJ 57.010.512/0001-56\n\n` +
-              `Por favor, envie o comprovante após o pagamento.\n\n— Ana Buck Doces`;
+  const msg = [
+    `Olá ${nome}, tudo bem?`,
+    ``,
+    `Segue o extrato das suas cobranças pendentes:`,
+    `-----------------------------------`,
+    `${linhas}`,
+    `-----------------------------------`,
+    `*Total pendente:* R$ ${totalGeral.toFixed(2)}`,
+    ``,
+    `💳 *Chave PIX (CNPJ):*`,
+    `57.010.512/0001-56`,
+    ``,
+    `Por favor, envie o comprovante após o pagamento.`,
+    ``,
+    `— Ana Buck Doces`
+  ].join("\n");
 
-  const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg)}`;
+  const link = `https://wa.me/${numeroWhats}?text=${encodeURIComponent(msg )}`;
   window.open(link, "_blank");
 };
 
