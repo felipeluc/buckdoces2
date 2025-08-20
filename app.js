@@ -355,41 +355,6 @@ window.showDashboard = async () => {
   gerarCalendario(vendas, mesAtual, anoAtual);
 };
 
-// === GERA CALENDÁRIO NO DASHBOARD ===
-function gerarCalendario(vendas, mes, ano) {
-  const vendasPorData = {};
-  vendas.forEach(v => {
-    if (!v.data) return;
-    vendasPorData[v.data] = vendasPorData[v.data] || [];
-    vendasPorData[v.data].push(v);
-  });
-
-  const diasNoMes = new Date(ano, mes, 0).getDate();
-  const prefixoData = `${ano}-${String(mes).padStart(2, "0")}`;
-  let calendarioHtml = "";
-
-  for (let i = 1; i <= diasNoMes; i++) {
-    const diaStr = String(i).padStart(2, "0");
-    const dataCompleta = `${prefixoData}-${diaStr}`;
-    const vendasDoDia = vendasPorData[dataCompleta] || [];
-
-    const totalDia = vendasDoDia.reduce((acc, v) => {
-      const falta = parseFloat(v.faltaReceber) || 0;
-      const valorBase = parseFloat(v.valor) || 0;
-      return acc + (falta > 0 ? falta : valorBase);
-    }, 0);
-
-    calendarioHtml += `
-      <div class="calendar-day" onclick="mostrarDiaDashboard('${dataCompleta}')" style="cursor:pointer; border:1px solid #ccc; margin: 4px; padding: 8px; border-radius: 6px; text-align:center; width: 60px;">
-        <div style="font-weight:bold;">${diaStr}</div>
-        <div style="color:#c06078; font-size: 0.9em;">${totalDia > 0 ? totalDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : ""}</div>
-      </div>
-    `;
-  }
-
-  document.getElementById("dashboardCalendar").innerHTML = calendarioHtml;
-}
-
 // === MOSTRAR DETALHES DO DIA NO DASHBOARD ===
 window.mostrarDiaDashboard = async (dataCompleta) => {
   const snap = await getDocs(collection(db, "vendas"));
@@ -440,6 +405,7 @@ window.showCobranca = async () => {
     <label>Selecione o local:</label>
     <select id="localFiltro">
       <option value="">-- Escolha o local --</option>
+      <option value="todos">Todos</option>
       ${[...new Set(pendentes.map(v => v.local || "Não informado"))]
         .map(local => `<option value="${local}">${local}</option>`).join("")}
     </select>
@@ -472,8 +438,14 @@ window.showCobranca = async () => {
       return;
     }
 
-    const clientes = pendentes
-      .filter(v => v.local === localSelecionado)
+    let clientesParaFiltro = [];
+    if (localSelecionado === "todos") {
+      clientesParaFiltro = pendentes;
+    } else {
+      clientesParaFiltro = pendentes.filter(v => v.local === localSelecionado);
+    }
+
+    const clientes = clientesParaFiltro
       .reduce((acc, v) => {
         const tel = (v.telefone || "").replace(/\D/g, "");
         if (tel && !acc.some(c => c.telefone === tel)) {
@@ -484,6 +456,7 @@ window.showCobranca = async () => {
 
     const clienteSelect = document.getElementById("clienteFiltro");
     clienteSelect.innerHTML = `<option value="">-- Escolha o cliente --</option>` +
+      `<option value="todos">Todos</option>` +
       clientes.map(c => `<option value="${c.telefone}">${c.nome}</option>`).join("");
 
     document.getElementById("clienteFiltroContainer").style.display = "block";
@@ -508,29 +481,46 @@ window.showCobranca = async () => {
   document.getElementById("tipoCobrancaFiltro").addEventListener("change", e => {
     const tipoSelecionado = e.target.value;
     const telefoneSelecionado = document.getElementById("clienteFiltro").value;
+    const localSelecionado = document.getElementById("localFiltro").value;
     
-    if (!tipoSelecionado || !telefoneSelecionado) {
+    if (!tipoSelecionado || !telefoneSelecionado || !localSelecionado) {
       document.getElementById("resultadosCobranca").innerHTML = "";
       return;
     }
 
-    mostrarCobrancasPorTipo(telefoneSelecionado, tipoSelecionado);
+    mostrarCobrancasPorTipo(telefoneSelecionado, tipoSelecionado, localSelecionado);
   });
 };
 
 // === MOSTRAR COBRANÇAS POR TIPO ===
-window.mostrarCobrancasPorTipo = (telefone, tipo) => {
+window.mostrarCobrancasPorTipo = (telefone, tipo, local) => {
   const snap = localStorage.getItem("vendas");
   const todasVendas = JSON.parse(snap || "[]");
   
-  const vendasCliente = todasVendas.filter(v => 
-    (v.telefone || "").replace(/\D/g, "") === telefone && 
-    v.status !== "pago" && 
-    v.dataReceber
-  );
+  let vendasCliente = [];
+  
+  if (telefone === "todos") {
+    // Se cliente é "todos", filtra por local
+    if (local === "todos") {
+      vendasCliente = todasVendas.filter(v => v.status !== "pago" && v.dataReceber);
+    } else {
+      vendasCliente = todasVendas.filter(v => 
+        v.local === local && 
+        v.status !== "pago" && 
+        v.dataReceber
+      );
+    }
+  } else {
+    // Se cliente específico, filtra normalmente
+    vendasCliente = todasVendas.filter(v => 
+      (v.telefone || "").replace(/\D/g, "") === telefone && 
+      v.status !== "pago" && 
+      v.dataReceber
+    );
+  }
 
   if (!vendasCliente.length) {
-    document.getElementById("resultadosCobranca").innerHTML = "<p>Nenhuma cobrança encontrada para este cliente.</p>";
+    document.getElementById("resultadosCobranca").innerHTML = "<p>Nenhuma cobrança encontrada para este filtro.</p>";
     return;
   }
 
@@ -566,75 +556,196 @@ window.mostrarCobrancasPorTipo = (telefone, tipo) => {
     return;
   }
 
-  // Agrupa por data de vencimento
-  const gruposPorData = vendasFiltradas.reduce((acc, venda) => {
-    const data = venda.dataReceber;
-    if (!acc[data]) {
-      acc[data] = [];
-    }
-    acc[data].push(venda);
-    return acc;
-  }, {});
+  // Se for "todos" os clientes, agrupa por cliente e data
+  let cards = "";
+  if (telefone === "todos") {
+    // Agrupa por cliente primeiro, depois por data
+    const gruposPorCliente = vendasFiltradas.reduce((acc, venda) => {
+      const tel = (venda.telefone || "").replace(/\D/g, "") || "sem-telefone";
+      if (!acc[tel]) {
+        acc[tel] = [];
+      }
+      acc[tel].push(venda);
+      return acc;
+    }, {});
 
-  // Ordena as datas
-  const datasOrdenadas = Object.keys(gruposPorData).sort((a, b) => new Date(a) - new Date(b));
+    cards = Object.entries(gruposPorCliente).map(([telefoneCliente, vendasDoCliente]) => {
+      // Agrupa por data de vencimento dentro do cliente
+      const gruposPorData = vendasDoCliente.reduce((acc, venda) => {
+        const data = venda.dataReceber;
+        if (!acc[data]) {
+          acc[data] = [];
+        }
+        acc[data].push(venda);
+        return acc;
+      }, {});
 
-  const cards = datasOrdenadas.map(data => {
-    const vendasDaData = gruposPorData[data];
-    const nome = vendasDaData[0].cliente || "Sem nome";
+      const datasOrdenadas = Object.keys(gruposPorData).sort((a, b) => new Date(a) - new Date(b));
 
-    const comprasHtml = vendasDaData.map((venda, index) => {
-      const valor = parseFloat(venda.valor || 0);
-      const valorPago = parseFloat(venda.valorParcial) || 0;
-      const faltaPagar = parseFloat(venda.faltaReceber) || (valor - valorPago);
-      const produtosHtml = (venda.produtosVendidos || []).map(p => `<div>- ${p}</div>`).join("");
-      const borderStyle = index > 0 ? 'border-top: 1px dashed #ccc; padding-top: 10px; margin-top: 10px;' : '';
+      return datasOrdenadas.map(data => {
+        const vendasDaData = gruposPorData[data];
+        const nome = vendasDaData[0].cliente || "Sem nome";
+
+        const comprasHtml = vendasDaData.map((venda, index) => {
+          const valor = parseFloat(venda.valor || 0);
+          const valorPago = parseFloat(venda.valorParcial) || 0;
+          const faltaPagar = parseFloat(venda.faltaReceber) || (valor - valorPago);
+          const produtosHtml = (venda.produtosVendidos || []).map(p => `<div>- ${p}</div>`).join("");
+          const borderStyle = index > 0 ? 'border-top: 1px dashed #ccc; padding-top: 10px; margin-top: 10px;' : '';
+
+          return `
+            <div class="compra-individual" style="${borderStyle}">
+              <p><strong>Data da Compra:</strong> ${formatarData(venda.data)}</p>
+              <p><strong>Local:</strong> ${venda.local || "Não informado"}</p>
+              <p><strong>Valor Total:</strong> ${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+              <p><strong>Valor Pago:</strong> ${valorPago.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+              <p><strong>Falta Pagar:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+              <p><strong>Produtos:</strong></p>
+              <div style="margin-left: 15px;">${produtosHtml || "Nenhum produto listado."}</div>
+            </div>
+          `;
+        }).join("");
+
+        const totalValorGrupo = vendasDaData.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
+        const totalPagoGrupo = vendasDaData.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
+        const totalFaltaPagarGrupo = vendasDaData.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
+
+        // Verifica se está vencida
+        const dataVencimento = new Date(data);
+        const isVencida = dataVencimento < hoje;
+        const statusVencimento = isVencida ? '🔴 VENCIDA' : '🟢 A VENCER';
+
+        return `
+          <div class="card" style="margin-bottom:25px; padding:20px; border:none; border-radius:15px; box-shadow: 0 8px 25px rgba(0,0,0,0.12); background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); position: relative; overflow: hidden;">
+            <div style="position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: ${isVencida ? 'linear-gradient(90deg, #ff6b6b, #ee5a52)' : 'linear-gradient(90deg, #51cf66, #40c057)'};"></div>
+            <div style="display: flex; align-items: center; margin-bottom: 15px;">
+              <div style="width: 50px; height: 50px; border-radius: 50%; background: ${isVencida ? 'linear-gradient(135deg, #ff6b6b, #ee5a52)' : 'linear-gradient(135deg, #51cf66, #40c057)'}; display: flex; align-items: center; justify-content: center; margin-right: 15px; color: white; font-weight: bold; font-size: 18px;">
+                ${isVencida ? '!' : '✓'}
+              </div>
+              <div>
+                <h3 style="margin: 0; color: #2c3e50; font-size: 1.4em; font-weight: 600;">${nome}</h3>
+                <p style="margin: 5px 0 0 0; color: ${isVencida ? '#e74c3c' : '#27ae60'}; font-weight: 600; font-size: 0.95em;">${statusVencimento} - Vencimento: ${formatarData(data)}</p>
+              </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.7); border-radius: 12px; padding: 15px; margin-bottom: 20px; border: 1px solid rgba(0,0,0,0.05);">
+              ${comprasHtml}
+            </div>
+            <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; text-align: center;">
+                <div style="background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                  <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total Geral</div>
+                  <div style="color: #2c3e50; font-weight: bold; font-size: 1.1em;">${totalValorGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+                </div>
+                <div style="background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                  <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total Pago</div>
+                  <div style="color: #27ae60; font-weight: bold; font-size: 1.1em;">${totalPagoGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+                </div>
+                <div style="background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                  <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total Pendente</div>
+                  <div style="color: #e74c3c; font-weight: bold; font-size: 1.1em;">${totalFaltaPagarGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+                </div>
+              </div>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;">
+              <button style="background: linear-gradient(135deg, #27ae60, #2ecc71); color: white; border: none; padding: 12px 20px; border-radius: 25px; cursor: pointer; font-size: 0.9em; font-weight: 600; box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3); transition: all 0.3s ease; min-width: 120px;" onclick="marcarPagoGrupo('${telefoneCliente}', '${data}')" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(46, 204, 113, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(46, 204, 113, 0.3)'">Pagar Tudo</button>
+              <button style="background: linear-gradient(135deg, #f8b4cb, #f48fb1); color: white; border: none; padding: 12px 20px; border-radius: 25px; cursor: pointer; font-size: 0.9em; font-weight: 600; box-shadow: 0 4px 15px rgba(244, 143, 177, 0.3); transition: all 0.3s ease; min-width: 120px;" onclick="mostrarFormParcialGrupo('${telefoneCliente}', '${data}')" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(244, 143, 177, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(244, 143, 177, 0.3)'">Pago Parcial</button>
+              <button style="background: linear-gradient(135deg, #a8e6cf, #7fcdcd); color: white; border: none; padding: 12px 20px; border-radius: 25px; cursor: pointer; font-size: 0.9em; font-weight: 600; box-shadow: 0 4px 15px rgba(127, 205, 205, 0.3); transition: all 0.3s ease; min-width: 120px;" onclick="cobrarWhats('${telefoneCliente}', '${data}')" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(127, 205, 205, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(127, 205, 205, 0.3)'">WhatsApp</button>
+              <button style="background: linear-gradient(135deg, #dda0dd, #d8bfd8); color: white; border: none; padding: 12px 20px; border-radius: 25px; cursor: pointer; font-size: 0.9em; font-weight: 600; box-shadow: 0 4px 15px rgba(216, 191, 216, 0.3); transition: all 0.3s ease; min-width: 120px;" onclick="reagendarGrupo('${telefoneCliente}', '${data}')" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(216, 191, 216, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(216, 191, 216, 0.3)'">Reagendar</button>
+            </div>
+            <div id="parcial-grupo-${telefoneCliente}-${data.replace(/-/g, '')}" style="margin-top:20px; display:none;"></div>
+            <div id="reagendar-${telefoneCliente}-${data.replace(/-/g, '')}" style="margin-top:20px; display:none;"></div>
+          </div>
+        `;
+      }).join("");
+    }).flat().join("");
+  } else {
+    // Lógica original para cliente específico
+    const gruposPorData = vendasFiltradas.reduce((acc, venda) => {
+      const data = venda.dataReceber;
+      if (!acc[data]) {
+        acc[data] = [];
+      }
+      acc[data].push(venda);
+      return acc;
+    }, {});
+
+    const datasOrdenadas = Object.keys(gruposPorData).sort((a, b) => new Date(a) - new Date(b));
+
+    cards = datasOrdenadas.map(data => {
+      const vendasDaData = gruposPorData[data];
+      const nome = vendasDaData[0].cliente || "Sem nome";
+
+      const comprasHtml = vendasDaData.map((venda, index) => {
+        const valor = parseFloat(venda.valor || 0);
+        const valorPago = parseFloat(venda.valorParcial) || 0;
+        const faltaPagar = parseFloat(venda.faltaReceber) || (valor - valorPago);
+        const produtosHtml = (venda.produtosVendidos || []).map(p => `<div>- ${p}</div>`).join("");
+        const borderStyle = index > 0 ? 'border-top: 1px dashed #ccc; padding-top: 10px; margin-top: 10px;' : '';
+
+        return `
+          <div class="compra-individual" style="${borderStyle}">
+            <p><strong>Data da Compra:</strong> ${formatarData(venda.data)}</p>
+            <p><strong>Valor Total:</strong> ${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+            <p><strong>Valor Pago:</strong> ${valorPago.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+            <p><strong>Falta Pagar:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+            <p><strong>Produtos:</strong></p>
+            <div style="margin-left: 15px;">${produtosHtml || "Nenhum produto listado."}</div>
+          </div>
+        `;
+      }).join("");
+
+      const totalValorGrupo = vendasDaData.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
+      const totalPagoGrupo = vendasDaData.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
+      const totalFaltaPagarGrupo = vendasDaData.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
+
+      // Verifica se está vencida
+      const dataVencimento = new Date(data);
+      const isVencida = dataVencimento < hoje;
+      const statusVencimento = isVencida ? '🔴 VENCIDA' : '🟢 A VENCER';
 
       return `
-        <div class="compra-individual" style="${borderStyle}">
-          <p><strong>Data da Compra:</strong> ${formatarData(venda.data)}</p>
-          <p><strong>Valor Total:</strong> ${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-          <p><strong>Valor Pago:</strong> ${valorPago.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-          <p><strong>Falta Pagar:</strong> ${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-          <p><strong>Produtos:</strong></p>
-          <div style="margin-left: 15px;">${produtosHtml || "Nenhum produto listado."}</div>
+        <div class="card" style="margin-bottom:25px; padding:20px; border:none; border-radius:15px; box-shadow: 0 8px 25px rgba(0,0,0,0.12); background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); position: relative; overflow: hidden;">
+          <div style="position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: ${isVencida ? 'linear-gradient(90deg, #ff6b6b, #ee5a52)' : 'linear-gradient(90deg, #51cf66, #40c057)'};"></div>
+          <div style="display: flex; align-items: center; margin-bottom: 15px;">
+            <div style="width: 50px; height: 50px; border-radius: 50%; background: ${isVencida ? 'linear-gradient(135deg, #ff6b6b, #ee5a52)' : 'linear-gradient(135deg, #51cf66, #40c057)'}; display: flex; align-items: center; justify-content: center; margin-right: 15px; color: white; font-weight: bold; font-size: 18px;">
+              ${isVencida ? '!' : '✓'}
+            </div>
+            <div>
+              <h3 style="margin: 0; color: #2c3e50; font-size: 1.4em; font-weight: 600;">${nome}</h3>
+              <p style="margin: 5px 0 0 0; color: ${isVencida ? '#e74c3c' : '#27ae60'}; font-weight: 600; font-size: 0.95em;">${statusVencimento} - Vencimento: ${formatarData(data)}</p>
+            </div>
+          </div>
+          <div style="background: rgba(255,255,255,0.7); border-radius: 12px; padding: 15px; margin-bottom: 20px; border: 1px solid rgba(0,0,0,0.05);">
+            ${comprasHtml}
+          </div>
+          <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; text-align: center;">
+              <div style="background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total Geral</div>
+                <div style="color: #2c3e50; font-weight: bold; font-size: 1.1em;">${totalValorGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+              </div>
+              <div style="background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total Pago</div>
+                <div style="color: #27ae60; font-weight: bold; font-size: 1.1em;">${totalPagoGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+              </div>
+              <div style="background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total Pendente</div>
+                <div style="color: #e74c3c; font-weight: bold; font-size: 1.1em;">${totalFaltaPagarGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;">
+            <button style="background: linear-gradient(135deg, #27ae60, #2ecc71); color: white; border: none; padding: 12px 20px; border-radius: 25px; cursor: pointer; font-size: 0.9em; font-weight: 600; box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3); transition: all 0.3s ease; min-width: 120px;" onclick="marcarPagoGrupo('${telefone}', '${data}')" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(46, 204, 113, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(46, 204, 113, 0.3)'">Pagar Tudo</button>
+            <button style="background: linear-gradient(135deg, #f8b4cb, #f48fb1); color: white; border: none; padding: 12px 20px; border-radius: 25px; cursor: pointer; font-size: 0.9em; font-weight: 600; box-shadow: 0 4px 15px rgba(244, 143, 177, 0.3); transition: all 0.3s ease; min-width: 120px;" onclick="mostrarFormParcialGrupo('${telefone}', '${data}')" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(244, 143, 177, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(244, 143, 177, 0.3)'">Pago Parcial</button>
+            <button style="background: linear-gradient(135deg, #a8e6cf, #7fcdcd); color: white; border: none; padding: 12px 20px; border-radius: 25px; cursor: pointer; font-size: 0.9em; font-weight: 600; box-shadow: 0 4px 15px rgba(127, 205, 205, 0.3); transition: all 0.3s ease; min-width: 120px;" onclick="cobrarWhats('${telefone}', '${data}')" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(127, 205, 205, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(127, 205, 205, 0.3)'">WhatsApp</button>
+            <button style="background: linear-gradient(135deg, #dda0dd, #d8bfd8); color: white; border: none; padding: 12px 20px; border-radius: 25px; cursor: pointer; font-size: 0.9em; font-weight: 600; box-shadow: 0 4px 15px rgba(216, 191, 216, 0.3); transition: all 0.3s ease; min-width: 120px;" onclick="reagendarGrupo('${telefone}', '${data}')" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(216, 191, 216, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(216, 191, 216, 0.3)'">Reagendar</button>
+          </div>
+          <div id="parcial-grupo-${telefone}-${data.replace(/-/g, '')}" style="margin-top:20px; display:none;"></div>
+          <div id="reagendar-${telefone}-${data.replace(/-/g, '')}" style="margin-top:20px; display:none;"></div>
         </div>
       `;
     }).join("");
-
-    const totalValorGrupo = vendasDaData.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
-    const totalPagoGrupo = vendasDaData.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
-    const totalFaltaPagarGrupo = vendasDaData.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
-
-    // Verifica se está vencida
-    const dataVencimento = new Date(data);
-    const isVencida = dataVencimento < hoje;
-    const corBorda = isVencida ? '#d9534f' : '#5cb85c';
-    const statusVencimento = isVencida ? '🔴 VENCIDA' : '🟢 A VENCER';
-
-    return `
-      <div class="card" style="margin-bottom:20px; padding:15px; border:2px solid ${corBorda}; border-radius:10px; box-shadow: 2px 2px 8px rgba(0,0,0,0.1); background-color: #f9f9f9;">
-        <h3 style="margin-top:0; color:#333;">${nome}</h3>
-        <p style="font-weight: bold; color: ${corBorda}; margin-bottom: 10px;">${statusVencimento} - Vencimento: ${formatarData(data)}</p>
-        <div style="border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 15px;">
-          ${comprasHtml}
-        </div>
-        <div style="padding-top: 10px; text-align: right; font-size: 1.1em; font-weight: bold; color: #555;">
-          <p style="margin: 5px 0;">Total Geral: ${totalValorGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-          <p style="margin: 5px 0;">Total Pago: ${totalPagoGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-          <p style="margin: 5px 0; color: #d9534f;">Total Pendente: ${totalFaltaPagarGrupo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-        </div>
-        <div style="margin-top: 20px; border-top: 1px solid #ddd; padding-top: 15px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
-          <button style="background-color: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9em;" onclick="marcarPagoGrupo('${telefone}', '${data}')">Pagar Tudo</button>
-          <button style="background-color: #ffc107; color: #333; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9em;" onclick="mostrarFormParcialGrupo('${telefone}', '${data}')">Pago Parcial</button>
-          <button style="background-color: #17a2b8; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9em;" onclick="cobrarWhats('${telefone}', '${data}')">WhatsApp</button>
-          <button style="background-color: #6c757d; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9em;" onclick="reagendarGrupo('${telefone}', '${data}')">Reagendar</button>
-        </div>
-        <div id="parcial-grupo-${telefone}-${data.replace(/-/g, '')}" style="margin-top:15px; display:none;"></div>
-        <div id="reagendar-${telefone}-${data.replace(/-/g, '')}" style="margin-top:15px; display:none;"></div>
-      </div>
-    `;
-  }).join("");
+  }
 
   // Calcula totais gerais
   const totalGeralValor = vendasFiltradas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
@@ -642,17 +753,31 @@ window.mostrarCobrancasPorTipo = (telefone, tipo) => {
   const totalGeralPendente = vendasFiltradas.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
 
   const resumoGeral = `
-    <div style="background-color: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center;">
-      <h3 style="margin-top: 0; color: #495057;">Resumo Geral - ${titulo}</h3>
-      <div style="display: flex; justify-content: space-around; flex-wrap: wrap;">
-        <div><strong>Total Geral:</strong> ${totalGeralValor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
-        <div><strong>Total Pago:</strong> ${totalGeralPago.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
-        <div style="color: #d9534f;"><strong>Total Pendente:</strong> ${totalGeralPendente.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 15px; margin-bottom: 30px; color: white; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);">
+      <h3 style="margin: 0 0 20px 0; color: white; text-align: center; font-size: 1.5em; font-weight: 600;">${titulo}</h3>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+        <div style="background: rgba(255,255,255,0.15); backdrop-filter: blur(10px); padding: 20px; border-radius: 12px; text-align: center; border: 1px solid rgba(255,255,255,0.2);">
+          <div style="color: rgba(255,255,255,0.8); font-size: 0.9em; margin-bottom: 8px; font-weight: 500;">💰 Total Geral</div>
+          <div style="color: white; font-weight: bold; font-size: 1.3em;">${totalGeralValor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.15); backdrop-filter: blur(10px); padding: 20px; border-radius: 12px; text-align: center; border: 1px solid rgba(255,255,255,0.2);">
+          <div style="color: rgba(255,255,255,0.8); font-size: 0.9em; margin-bottom: 8px; font-weight: 500;">✅ Total Pago</div>
+          <div style="color: #4ade80; font-weight: bold; font-size: 1.3em;">${totalGeralPago.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.15); backdrop-filter: blur(10px); padding: 20px; border-radius: 12px; text-align: center; border: 1px solid rgba(255,255,255,0.2);">
+          <div style="color: rgba(255,255,255,0.8); font-size: 0.9em; margin-bottom: 8px; font-weight: 500;">🔔 Total Pendente</div>
+          <div style="color: #f87171; font-weight: bold; font-size: 1.3em;">${totalGeralPendente.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+        </div>
       </div>
+      ${telefone === "todos" && local === "todos" ? `
+        <div style="text-align: center; margin-top: 25px;">
+          <button style="background: linear-gradient(135deg, #ff6b6b, #ee5a52); color: white; border: none; padding: 15px 30px; border-radius: 25px; cursor: pointer; font-size: 1em; font-weight: 600; box-shadow: 0 4px 15px rgba(238, 90, 82, 0.3); transition: all 0.3s ease;" onclick="gerarPDF('${tipo}', '${local}', '${telefone}')" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(238, 90, 82, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(238, 90, 82, 0.3)'">📄 Gerar PDF</button>
+        </div>
+      ` : ''}
     </div>
   `;
 
-  document.getElementById("resultadosCobranca").innerHTML = `<h3>${titulo}</h3>${resumoGeral}${cards}`;
+  document.getElementById("resultadosCobranca").innerHTML = `${resumoGeral}${cards}`;
 };
 
 // === MOSTRAR FORMULÁRIO DE PAGAMENTO PARCIAL DE GRUPO ===
@@ -944,3 +1069,256 @@ style.innerHTML = `
   }
 `;
 document.head.appendChild(style);
+
+
+
+// === FUNÇÃO PARA GERAR PDF ===
+window.gerarPDF = async (tipo, local, telefone) => {
+  const snap = localStorage.getItem("vendas");
+  const todasVendas = JSON.parse(snap || "[]");
+  
+  let vendasCliente = [];
+  
+  if (telefone === "todos") {
+    if (local === "todos") {
+      vendasCliente = todasVendas.filter(v => v.status !== "pago" && v.dataReceber);
+    } else {
+      vendasCliente = todasVendas.filter(v => 
+        v.local === local && 
+        v.status !== "pago" && 
+        v.dataReceber
+      );
+    }
+  } else {
+    vendasCliente = todasVendas.filter(v => 
+      (v.telefone || "").replace(/\D/g, "") === telefone && 
+      v.status !== "pago" && 
+      v.dataReceber
+    );
+  }
+
+  if (!vendasCliente.length) {
+    alert("Nenhuma cobrança encontrada para gerar PDF.");
+    return;
+  }
+
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+
+  let vendasFiltradas = [];
+  let titulo = "";
+
+  switch (tipo) {
+    case "vencidas":
+      vendasFiltradas = vendasCliente.filter(v => {
+        const dataVencimento = new Date(v.dataReceber);
+        return dataVencimento < hoje;
+      });
+      titulo = "Cobranças Vencidas";
+      break;
+    case "a_vencer":
+      vendasFiltradas = vendasCliente.filter(v => {
+        const dataVencimento = new Date(v.dataReceber);
+        return dataVencimento >= hoje;
+      });
+      titulo = "Cobranças A Vencer";
+      break;
+    case "todas":
+      vendasFiltradas = vendasCliente;
+      titulo = "Todas as Cobranças";
+      break;
+  }
+
+  if (!vendasFiltradas.length) {
+    alert("Nenhuma cobrança encontrada para gerar PDF.");
+    return;
+  }
+
+  // Calcula totais gerais
+  const totalGeralValor = vendasFiltradas.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
+  const totalGeralPago = vendasFiltradas.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
+  const totalGeralPendente = vendasFiltradas.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
+
+  // Agrupa por cliente
+  const gruposPorCliente = vendasFiltradas.reduce((acc, venda) => {
+    const tel = (venda.telefone || "").replace(/\D/g, "") || "sem-telefone";
+    if (!acc[tel]) {
+      acc[tel] = [];
+    }
+    acc[tel].push(venda);
+    return acc;
+  }, {});
+
+  // Gera conteúdo HTML para o PDF
+  let conteudoHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Relatório de Cobranças - Ana Buck Doces</title>
+      <style>
+        body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #c06078; padding-bottom: 20px; }
+        .header h1 { color: #c06078; margin: 0; font-size: 24px; }
+        .header p { margin: 5px 0; color: #666; }
+        .resumo { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+        .resumo h2 { color: #495057; margin-top: 0; }
+        .resumo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 15px; }
+        .resumo-item { text-align: center; padding: 15px; background: white; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .resumo-item .label { font-size: 12px; color: #666; margin-bottom: 5px; }
+        .resumo-item .valor { font-size: 16px; font-weight: bold; }
+        .cliente-section { margin-bottom: 30px; page-break-inside: avoid; }
+        .cliente-header { background: #c06078; color: white; padding: 15px; border-radius: 8px 8px 0 0; }
+        .cliente-header h3 { margin: 0; font-size: 18px; }
+        .cliente-content { border: 1px solid #c06078; border-top: none; border-radius: 0 0 8px 8px; }
+        .venda-item { padding: 15px; border-bottom: 1px solid #eee; }
+        .venda-item:last-child { border-bottom: none; }
+        .venda-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .venda-data { font-weight: bold; color: #495057; }
+        .venda-status { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .status-vencida { background: #f8d7da; color: #721c24; }
+        .status-a-vencer { background: #d4edda; color: #155724; }
+        .venda-detalhes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 10px; }
+        .detalhe-item { font-size: 14px; }
+        .detalhe-label { font-weight: bold; color: #495057; }
+        .produtos { margin-top: 10px; }
+        .produtos-lista { margin-left: 20px; font-size: 14px; }
+        .cliente-totais { background: #f8f9fa; padding: 15px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center; }
+        .total-item { font-size: 14px; }
+        .total-label { color: #666; margin-bottom: 5px; }
+        .total-valor { font-weight: bold; font-size: 16px; }
+        .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; border-top: 1px solid #eee; padding-top: 20px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>Ana Buck Doces</h1>
+        <p>Relatório de Cobranças - ${titulo}</p>
+        <p>Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+      </div>
+
+      <div class="resumo">
+        <h2>Resumo Geral</h2>
+        <div class="resumo-grid">
+          <div class="resumo-item">
+            <div class="label">Total Geral</div>
+            <div class="valor" style="color: #495057;">${totalGeralValor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+          </div>
+          <div class="resumo-item">
+            <div class="label">Total Pago</div>
+            <div class="valor" style="color: #28a745;">${totalGeralPago.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+          </div>
+          <div class="resumo-item">
+            <div class="label">Total Pendente</div>
+            <div class="valor" style="color: #dc3545;">${totalGeralPendente.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+          </div>
+        </div>
+      </div>
+  `;
+
+  // Adiciona cada cliente
+  Object.entries(gruposPorCliente).forEach(([telefoneCliente, vendasDoCliente]) => {
+    const nomeCliente = vendasDoCliente[0].cliente || "Cliente sem nome";
+    const telefoneFormatado = telefoneCliente.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+    
+    // Calcula totais do cliente
+    const totalCliente = vendasDoCliente.reduce((acc, v) => acc + (parseFloat(v.valor) || 0), 0);
+    const pagoCliente = vendasDoCliente.reduce((acc, v) => acc + (parseFloat(v.valorParcial) || 0), 0);
+    const pendenteCliente = vendasDoCliente.reduce((acc, v) => acc + (parseFloat(v.faltaReceber) || 0), 0);
+
+    conteudoHTML += `
+      <div class="cliente-section">
+        <div class="cliente-header">
+          <h3>${nomeCliente}</h3>
+          <p style="margin: 5px 0 0 0; font-size: 14px;">Telefone: ${telefoneFormatado}</p>
+        </div>
+        <div class="cliente-content">
+    `;
+
+    // Ordena vendas por data de vencimento
+    const vendasOrdenadas = vendasDoCliente.sort((a, b) => new Date(a.dataReceber) - new Date(b.dataReceber));
+
+    vendasOrdenadas.forEach(venda => {
+      const dataVencimento = new Date(venda.dataReceber);
+      const isVencida = dataVencimento < hoje;
+      const statusClass = isVencida ? 'status-vencida' : 'status-a-vencer';
+      const statusText = isVencida ? 'VENCIDA' : 'A VENCER';
+      
+      const valor = parseFloat(venda.valor || 0);
+      const valorPago = parseFloat(venda.valorParcial) || 0;
+      const faltaPagar = parseFloat(venda.faltaReceber) || (valor - valorPago);
+      
+      const produtos = (venda.produtosVendidos || []).map(p => `<li>${p}</li>`).join("");
+
+      conteudoHTML += `
+        <div class="venda-item">
+          <div class="venda-header">
+            <div class="venda-data">Compra: ${formatarData(venda.data)}</div>
+            <div class="venda-status ${statusClass}">${statusText} - ${formatarData(venda.dataReceber)}</div>
+          </div>
+          <div class="venda-detalhes">
+            <div class="detalhe-item">
+              <span class="detalhe-label">Local:</span> ${venda.local || "Não informado"}
+            </div>
+            <div class="detalhe-item">
+              <span class="detalhe-label">Valor Total:</span> ${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+            </div>
+            <div class="detalhe-item">
+              <span class="detalhe-label">Valor Pago:</span> ${valorPago.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+            </div>
+            <div class="detalhe-item">
+              <span class="detalhe-label">Falta Pagar:</span> <strong style="color: #dc3545;">${faltaPagar.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong>
+            </div>
+          </div>
+          ${produtos ? `
+            <div class="produtos">
+              <div class="detalhe-label">Produtos:</div>
+              <ul class="produtos-lista">${produtos}</ul>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    });
+
+    conteudoHTML += `
+          <div class="cliente-totais">
+            <div class="total-item">
+              <div class="total-label">Total do Cliente</div>
+              <div class="total-valor" style="color: #495057;">${totalCliente.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+            </div>
+            <div class="total-item">
+              <div class="total-label">Total Pago</div>
+              <div class="total-valor" style="color: #28a745;">${pagoCliente.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+            </div>
+            <div class="total-item">
+              <div class="total-label">Total Pendente</div>
+              <div class="total-valor" style="color: #dc3545;">${pendenteCliente.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  conteudoHTML += `
+      <div class="footer">
+        <p>Relatório gerado automaticamente pelo sistema Ana Buck Doces</p>
+        <p>Total de clientes: ${Object.keys(gruposPorCliente).length} | Total de cobranças: ${vendasFiltradas.length}</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  // Cria um blob com o conteúdo HTML
+  const blob = new Blob([conteudoHTML], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  
+  // Abre uma nova janela para imprimir/salvar como PDF
+  const novaJanela = window.open(url, '_blank');
+  novaJanela.onload = function() {
+    setTimeout(() => {
+      novaJanela.print();
+      URL.revokeObjectURL(url);
+    }, 500);
+  };
+};
